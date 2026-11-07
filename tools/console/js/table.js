@@ -474,12 +474,15 @@ function tblView(st){
 }
 const tblName = w => (w.closest("#drawer") ? DR.title : (document.querySelector(`#tabs button[data-t="${TAB}"]`) || {}).textContent || TAB).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 60);
 // 导出 Excel：没截断时导出当前显示的行和列；被截断（2000 行）时按同一查询从数据库取全部行（服务端上限 20 万行）
+// 查询结果的列名换成显示名（报表定义的 alias）
+const colAlias = (cols, alias) => cols.map(c => alias[c] || c);
 async function tblXlsx(w, st){
   const name = tblName(w) + "_" + new Date().toISOString().slice(0, 10), sheet = tblName(w).slice(0, 31);
   try {
     if (st.r.truncated && st.r.src && st.r.src.length === 1) {
       toast("正在从数据库取全部行…");
       const s = st.r.src[0], all = await api("/api/q", {action:s.action, args:s.args, all:true});
+      if (s.alias) all.columns = colAlias(all.columns, s.alias);
       toast(`正在生成 Excel（${all.rows.length} 行）…`);
       await saveXlsx([xFromResult(all, sheet)], name);
       toast(`已导出 ${all.rows.length} 行${all.truncated ? "（超过 20 万行，只导出了前 20 万行）" : ""}；页面上的筛选、隐藏列没有带过去`);

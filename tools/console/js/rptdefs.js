@@ -1260,6 +1260,10 @@ const RPTDEFS = [
     "def": "0"
    }
   ],
+  "alias": {
+   "TransCode": "凭证代码",
+   "AcctCode": "科目编码"
+  },
   "drill": {
    "0": {
     "stype": "1",
@@ -1271,7 +1275,7 @@ const RPTDEFS = [
     "stype": "2",
     "set": {
      "TransCode": "凭证代码",
-     "Acct": "=科目"
+     "Acct": "=科目编码"
     }
    }
   },

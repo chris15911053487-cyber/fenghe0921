@@ -101,7 +101,8 @@ function rptTable(r, v, res, el){
 }
 async function rptQuery(r, v){
   const res = await q("rpt" + r.id, rptArgs(r, v), true);
-  res.src = [{action: "rpt" + r.id, args: rptArgs(r, v)}];
+  res.src = [{action: "rpt" + r.id, args: rptArgs(r, v), alias: r.alias}];
+  if (r.alias) res.columns = colAlias(res.columns, r.alias);   // R10 过程输出英文字段名，这里换成显示名（钻取、复制、导出都用显示名）
   return res;
 }
 // 双击汇总行：drill.set 的值 = 行的列名（= 开头精确匹配，@ 开头沿用当前参数，' 开头固定值），在抽屉里逐层打开
