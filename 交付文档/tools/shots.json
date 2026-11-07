@@ -1,0 +1,285 @@
+{
+ "_说明": "截图清单。run：ok = 最近一次成功的正式运行，pre = 最近一次检查（检查通过或阻断），none = 不选运行。steps：按顺序执行的操作（click / clickIf 有才点 / wait / sleep）。marks：编号标注。",
+ "shots": [
+  {
+   "id": "login",
+   "login": true
+  },
+  {
+   "id": "overview",
+   "tab": "steps",
+   "run": "ok",
+   "marks": [
+    {
+     "sel": "#runBtn",
+     "n": 1
+    },
+    {
+     "sel": "#tabs",
+     "n": 2,
+     "at": "top"
+    },
+    {
+     "sel": "#goRun",
+     "n": 3
+    },
+    {
+     "sel": "#wtList",
+     "n": 4
+    }
+   ]
+  },
+  {
+   "id": "run",
+   "tab": "run",
+   "run": "ok",
+   "marks": [
+    {
+     "sel": "#fc",
+     "n": 1
+    },
+    {
+     "sel": "#rtSeg",
+     "n": 2
+    },
+    {
+     "sel": "#user",
+     "n": 3
+    },
+    {
+     "sel": "#btnPre",
+     "n": 4
+    }
+   ]
+  },
+  {
+   "id": "run_confirm",
+   "tab": "run",
+   "run": "ok",
+   "steps": [
+    {
+     "click": "#btnRun"
+    },
+    {
+     "wait": "#dlg[open]"
+    }
+   ]
+  },
+  {
+   "id": "checks_pre",
+   "tab": "checks",
+   "run": "ok"
+  },
+  {
+   "id": "checks_post",
+   "tab": "checks",
+   "run": "ok",
+   "steps": [
+    {
+     "scrollText": "POST-"
+    },
+    {
+     "sleep": 300
+    }
+   ]
+  },
+  {
+   "id": "hrsneed",
+   "tab": "hrsneed",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "qcp",
+   "tab": "qcp",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "b1cfg",
+   "tab": "b1cfg",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": "#b1Tabs button:has-text('计算参数')"
+    },
+    {
+     "sleep": 1500
+    },
+    {
+     "hide": "main .msg.err"
+    }
+   ]
+  },
+  {
+   "id": "steps",
+   "tab": "steps",
+   "run": "ok"
+  },
+  {
+   "id": "flow",
+   "tab": "flow",
+   "run": "ok"
+  },
+  {
+   "id": "items",
+   "tab": "items",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "inv",
+   "tab": "inv",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": "main button:has-text('查询')"
+    },
+    {
+     "sleep": 2500
+    }
+   ]
+  },
+  {
+   "id": "orders",
+   "tab": "orders",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "pool",
+   "tab": "pool",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "trace",
+   "tab": "trace",
+   "run": "ok",
+   "traceTop": true,
+   "steps": [
+    {
+     "sleep": 2500
+    },
+    {
+     "clickIf": "#trAll"
+    },
+    {
+     "sleep": 2500
+    }
+   ]
+  },
+  {
+   "id": "recon",
+   "tab": "recon",
+   "run": "ok",
+   "steps": [
+    {
+     "click": "#reconGo"
+    },
+    {
+     "sleep": 3000
+    }
+   ]
+  },
+  {
+   "id": "tb",
+   "tab": "tb",
+   "run": "ok"
+  },
+  {
+   "id": "ap",
+   "tab": "ap",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "goods",
+   "tab": "goods",
+   "run": "ok",
+   "steps": [
+    {
+     "clickIf": ".sgo"
+    },
+    {
+     "sleep": 1500
+    }
+   ]
+  },
+  {
+   "id": "reval",
+   "tab": "reval",
+   "run": "ok"
+  },
+  {
+   "id": "wwhist",
+   "tab": "wwhist",
+   "run": "ok"
+  },
+  {
+   "id": "jv",
+   "tab": "jv",
+   "run": "ok"
+  },
+  {
+   "id": "rpt",
+   "tab": "rpt",
+   "run": "ok",
+   "steps": [
+    {
+     "click": "#rptGo"
+    },
+    {
+     "sleep": 2500
+    }
+   ]
+  },
+  {
+   "id": "report",
+   "tab": "report",
+   "run": "ok"
+  }
+ ]
+}

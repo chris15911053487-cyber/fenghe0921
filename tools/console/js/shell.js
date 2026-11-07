@@ -163,9 +163,11 @@ function applyGate(){
   const fc = $("#fc") && $("#fc").value; if (!fc) return;
   const p = PSTAT[fc];
   $("#fcStat").innerHTML = p ? " " + pChip(fc) + (p.CalcRunId ? ` <span class="hint">最近成功正式运行 #${esc(p.LastOkRunId ?? p.CalcRunId)}</span>` : "") : "";
-  const why = fcBlock();
+  // 正式计算服务端要“管理”权限，模拟“操作”权限即可；按钮跟服务端一致，不让操作权限的人点了才报错（2026-11-07）
+  const need = runType === "F" ? "A" : "O";
+  const why = fcBlock() || (canDo(need) ? "" : `正式计算需要“管理”权限，你的权限是“${INFO.login.roleName || INFO.login.role}”；可以“只做计算前检查”或改做模拟。`);
   $("#fcGate").innerHTML = why ? `<div class="msg err">${esc(why)}</div>` : "";
-  $("#btnRun").disabled = JOB_BUSY || !(INFO && INFO.hasNew) || !canDo("O") || !!why;
+  $("#btnRun").disabled = JOB_BUSY || !(INFO && INFO.hasNew) || !canDo(need) || !!why;
 }
 async function loadScen(){ await loadScenSel(); }
 async function loadBoot(){

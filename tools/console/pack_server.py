@@ -12,6 +12,11 @@ for f in ('dev_server.py', 'hana_odbc.py', 'dpapi.py', 'index.html', 'login.html
 shutil.copytree(os.path.join(HERE, 'srcsql'), os.path.join(OUT, 'console', 'srcsql'))   # 取数 SQL（actions.json 的 sqlFile）
 for d in ('css', 'js'):   # 页面的样式和脚本（index.html 引用）
     shutil.copytree(os.path.join(HERE, d), os.path.join(OUT, 'console', d))
+SHOTS = os.path.join(ROOT, '交付文档', '截图')   # 使用手册的截图（2026-11-07，脱敏后截的）；服务从 console/img/ 读
+if os.path.isdir(SHOTS):
+    os.makedirs(os.path.join(OUT, 'console', 'img'))
+    for f in os.listdir(SHOTS):
+        if f.endswith('.png'): shutil.copy2(os.path.join(SHOTS, f), os.path.join(OUT, 'console', 'img', f))
 for f in ('run_server.bat', 'install_service.bat', 'install_service.ps1', 'restart_service.bat', 'restart_service.ps1'):
     shutil.copy2(os.path.join(HERE, 'server', f), os.path.join(OUT, f))
 src = open(os.path.join(ROOT, 'tools', 'README.md'), encoding='utf-8').read()

@@ -11,6 +11,9 @@ tools/console/server.json
 *.xlsx
 *.xls
 *.csv
+# 交付文档的截图（用户抽查后才入库）和生成的成品
+交付文档/截图/
+交付文档/dist/
 # 日志、审计
 tools/console/logs/
 tools/console/audit/

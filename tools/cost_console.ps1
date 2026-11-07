@@ -387,6 +387,14 @@ function Handle-Client($client) {
       Send-Resp $stream 200 $(if ($ext -eq 'css') { 'text/css; charset=utf-8' } else { 'text/javascript; charset=utf-8' }) ([IO.File]::ReadAllBytes($f)); return
     }
   }
+  # 使用手册的截图（2026-11-07）：只认 img\*.png，先找 console\img\，再找项目里的 交付文档\截图\
+  if ($method -eq 'GET' -and $path -cmatch '^/img/([a-z0-9_]+)\.png$') {
+    $n = $Matches[1] + '.png'
+    foreach ($d in @((Join-Path (Split-Path $pagePath) 'img'), (Join-Path (Split-Path (Split-Path (Split-Path $pagePath))) '交付文档\截图'))) {
+      $f = Join-Path $d $n
+      if (Test-Path -LiteralPath $f -PathType Leaf) { Send-Resp $stream 200 'image/png' ([IO.File]::ReadAllBytes($f)); return }
+    }
+  }
   try {
     if ($path -like '/api/*') {
       # 本机网页在请求头 X-Schema 里带所选公司（2026-10-23）；新部署的账套不在列表里时重新查一次

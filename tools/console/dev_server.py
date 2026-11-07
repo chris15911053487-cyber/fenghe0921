@@ -760,6 +760,12 @@ class H(BaseHTTPRequestHandler):
             f = os.path.join(HERE, m.group(1), m.group(2) + '.' + m.group(3))
             if os.path.isfile(f):
                 return self.send(200, ('text/css' if m.group(3) == 'css' else 'text/javascript') + '; charset=utf-8', open(f, 'rb').read())
+        # 使用手册的截图（2026-11-07）：只认 img/*.png，先找 console/img/（服务器打包时拷进来），再找项目里的 交付文档/截图/
+        m = re.match(r'^/img/([a-z0-9_]+)\.png$', p)
+        if m:
+            for d in (os.path.join(HERE, 'img'), os.path.join(HERE, '..', '..', '交付文档', '截图')):
+                f = os.path.join(d, m.group(1) + '.png')
+                if os.path.isfile(f): return self.send(200, 'image/png', open(f, 'rb').read())
         if p == '/login.html' and SERVER:
             return self.send(200, 'text/html; charset=utf-8', open(os.path.join(HERE, 'login.html'), 'rb').read())
         if p == '/api/info':

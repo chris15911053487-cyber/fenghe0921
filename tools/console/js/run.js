@@ -143,14 +143,14 @@ async function pollJob(){
   const busy = j.state === "running"; JOB_BUSY = busy;
   // 另一个公司（账套）的计算（2026-10-23）：只提示，不对运行号、不替它确认结果；同一时间只允许一个计算，等它结束
   if (j.schema && INFO && j.schema !== INFO.schema) {
-    $("#btnRun").disabled = busy || !INFO.hasNew || !canDo("O") || !!fcBlock(); $("#btnPre").disabled = busy || !INFO.hasNew || !canDo("O"); $("#btnBoot").disabled = busy || !$("#btnBoot").dataset.fc || !canDo("A");
+    $("#btnRun").disabled = busy || !INFO.hasNew || !canDo(runType === "F" ? "A" : "O") || !!fcBlock(); $("#btnPre").disabled = busy || !INFO.hasNew || !canDo("O"); $("#btnBoot").disabled = busy || !$("#btnBoot").dataset.fc || !canDo("A");
     const pill = $("#jobPill");
     $("#job").innerHTML = busy ? `<div class="msg info">公司（账套）${esc(j.schema)} 正在${esc(j.title)}（${j.by && INFO.login ? esc(j.by) + " 发起，" : ""}已 ${esc(j.elapsed)} 秒）。同一时间只允许一个计算，等它结束后才能发起。</div>` : "";
     pill.hidden = !busy; pill.className = "jobpill"; pill.onclick = e => e.preventDefault();
     if (busy) { pill.innerHTML = `<span class="spin" style="margin:0"></span>${esc(j.schema)} · ${esc(j.title)} · ${esc(j.elapsed)} 秒`; pollTimer = setTimeout(pollJob, 3000); }
     return;
   }
-  $("#btnRun").disabled = busy || !INFO.hasNew || !canDo("O") || !!fcBlock(); $("#btnPre").disabled = busy || !INFO.hasNew || !canDo("O"); $("#btnBoot").disabled = busy || !$("#btnBoot").dataset.fc || !canDo("A");
+  $("#btnRun").disabled = busy || !INFO.hasNew || !canDo(runType === "F" ? "A" : "O") || !!fcBlock(); $("#btnPre").disabled = busy || !INFO.hasNew || !canDo("O"); $("#btnBoot").disabled = busy || !$("#btnBoot").dataset.fc || !canDo("A");
   if ($("#btnLegacy")) $("#btnLegacy").disabled = busy || !$("#lgFrom").value || !canDo("A");
   const pill = $("#jobPill");
   if (j.state === "idle") { $("#job").innerHTML = ""; pill.hidden = true; return; }

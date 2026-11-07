@@ -34,7 +34,7 @@ async function snapDrawer(id, key, f){
 
 // quiet：运行中每秒刷新“步骤”页时不先清空成“加载中”，避免闪烁
 // 不依赖所选运行的页面；PAGES 是固定在页面里的操作区（发起计算、模拟场景、期初承接）
-const NORUN = new Set(["run", "scen", "boot", "b1cfg", "manual", "jv", "rpt", "margin", "costtrend"]);
+const NORUN = new Set(["run", "scen", "boot", "b1cfg", "manual", "guide", "jv", "rpt", "margin", "costtrend"]);
 const PAGES = {run:"#page-run", scen:"#page-scen", boot:"#page-boot"};
 // 多页签（wtabs.js，用户 2026-11-06）：换到已打开且数据没过期的页签时只把它放回来，不重查；停留在同一页时调用 = 重画，和原来一样
 async function renderTab(quiet){
@@ -56,6 +56,7 @@ async function tabBody(pane, quiet){
   if (TAB === "rpt") return renderRpt(pane);   // 成本报表（rpt.js），不依赖所选运行
   if (TAB === "margin" || TAB === "costtrend") return renderMargin(pane);   // 走势页 R23 / R22（margin.js、costtrend.js），不依赖所选运行
   if (TAB === "manual") return renderManual(pane);
+  if (TAB === "guide") return renderGuide(pane);   // 使用手册（guide.js，用户 2026-11-07）
   if (!SEL) { pane.innerHTML = `<div class="empty">还没有运行记录，或还没选择运行：点顶部的运行按钮选择一次，或先“发起计算”。</div>`; return; }
   const id = String(SEL.RunId);
   if (!quiet) pane.innerHTML = `<div class="empty">加载中…</div>`;

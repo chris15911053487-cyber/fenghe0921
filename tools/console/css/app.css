@@ -438,3 +438,56 @@ input.mgck{vertical-align:-2px;margin:0 4px 0 0;cursor:pointer}
 .mg-keys{display:inline-flex;flex-wrap:wrap;gap:4px 12px;font-weight:400;font-size:12px;color:var(--muted)}
 .mg-keys>span{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:900px){.mg-charts.all{grid-template-columns:minmax(0,1fr)}}
+/* 使用手册（guide.js，用户 2026-11-07）：左边文档目录（随页面滚动固定），右边正文；标题跳转时留出顶栏和页签的高度 */
+.gd{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px;align-items:start}
+.gd-side{position:sticky;top:calc(var(--hdr) + 52px);max-height:calc(100vh - var(--hdr) - 64px);overflow:auto;padding-right:6px;border-right:1px solid var(--line)}
+.gd-q input{width:100%;margin-bottom:8px}
+.gd-d{margin-bottom:2px}
+.gd-dt{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 8px;border-radius:6px;font-weight:600;cursor:pointer;color:var(--ink)}
+.gd-dt:hover{background:var(--hover)}
+.gd-d.on .gd-dt{background:var(--sel);color:var(--accent-text)}
+.gd-sub{display:none;padding:2px 0 6px}
+.gd-d.on .gd-sub{display:block}
+.gd-sub a{display:block;padding:3px 8px 3px 16px;font-size:12.5px;color:var(--muted);cursor:pointer;border-radius:4px;text-decoration:none}
+.gd-sub a.lv2{padding-left:28px}
+.gd-sub a:hover{color:var(--ink);background:var(--hover)}
+.gd-hit{display:block;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--ink);text-decoration:none}
+.gd-hit:hover{background:var(--hover)}
+.gd-hit span{color:var(--muted);font-size:12px;margin-left:6px}
+.gd-hit small{display:block;color:var(--muted);font-size:12px;line-height:1.45}
+.gd-hit mark{background:var(--warn-bg);color:var(--ink)}
+.gd-tip{margin-top:12px}
+.gd-doc{max-width:960px;line-height:1.75;min-width:0}
+.gd-doc .gd-h h1{font-size:22px;margin:4px 0 2px}
+.gd-doc .gd-h .bar{margin:8px 0 4px}
+.gd-doc h2{font-size:18px;margin:28px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.gd-doc h3{font-size:15px;margin:20px 0 6px}
+.gd-doc h4{font-size:14px;margin:14px 0 4px}
+.gd-doc h2,.gd-doc h3{scroll-margin-top:calc(var(--hdr) + 60px)}
+.gd-doc p,.gd-doc ul,.gd-doc ol{margin:6px 0 10px}
+.gd-doc ul,.gd-doc ol{padding-left:22px}
+.gd-doc code{font-family:var(--mono);font-size:12.5px;background:var(--soft);padding:1px 4px;border-radius:4px}
+.gd-doc blockquote{margin:10px 0;padding:8px 12px;border-left:3px solid var(--warn);background:var(--warn-bg);border-radius:0 6px 6px 0}
+.gd-pre{font-family:var(--mono);font-size:12.5px;background:var(--soft);padding:10px 12px;border-radius:6px;overflow:auto;line-height:1.5}
+.gd-ln{color:var(--accent-text);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.gd-tw{overflow:auto;margin:8px 0 12px}
+.gd-t{border-collapse:collapse;width:100%;font-size:13px;line-height:1.55}
+.gd-t th{background:var(--th-bg);color:var(--th-ink);text-align:left;font-weight:600;padding:6px 10px;border-bottom:1px solid var(--th-rule);white-space:nowrap}
+.gd-t td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.gd-ck{width:16px;height:16px;cursor:pointer}
+.gd-fig{margin:12px 0 16px}
+.gd-fig img{max-width:100%;border:1px solid var(--line);border-radius:6px;display:block}
+.gd-fig figcaption{color:var(--muted);font-size:12.5px;margin-top:4px}
+.gd-todo{margin:10px 0;padding:18px;border:1.5px dashed var(--line);border-radius:8px;color:var(--muted);text-align:center;background:var(--soft)}
+.gd-live{margin:8px 0 14px}
+.gd-flow{display:inline-block;padding:6px 0}
+.gd-frow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;margin:6px 0}
+.gd-frow i{font-style:normal;color:var(--accent-text);padding:0 8px;font-size:18px}
+.gd-box{display:inline-flex;flex-direction:column;align-items:center;padding:8px 12px;min-width:96px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent-soft);color:var(--ink);text-align:center;line-height:1.35}
+.gd-box small{color:var(--muted);font-size:11.5px}
+.gd-box.warn{border-color:var(--warn);background:var(--warn-bg)}
+@keyframes gdflash{from{background:var(--warn-bg)}to{background:transparent}}
+.gd-flash{animation:gdflash 1.6s ease-out}
+@media (max-width:900px){.gd{grid-template-columns:1fr}.gd-side{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding-bottom:8px}}
+body.gd-printing{background:var(--surface);padding:16px 24px}
+@media print{body.gd-printing .gd-fig img{max-height:80vh}.gd-doc h2{break-after:avoid}.gd-t tr,.gd-fig{break-inside:avoid}}
