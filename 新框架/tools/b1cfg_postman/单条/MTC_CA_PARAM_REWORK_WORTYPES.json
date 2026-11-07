@@ -1,0 +1,8 @@
+{
+  "Code": "REWORK_WORTYPES",
+  "Name": "返工单的订单类型",
+  "U_Category": "业务口径",
+  "U_Value": "30",
+  "U_DataType": "列表",
+  "U_Hint": "U_OrdType 逗号分隔，如 30"
+}

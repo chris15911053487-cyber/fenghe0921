@@ -1,0 +1,8 @@
+{
+  "Code": "PRICE_JUMP_AMT",
+  "Name": "价格波动报警金额",
+  "U_Category": "尾差与校验",
+  "U_Value": "100",
+  "U_DataType": "数字",
+  "U_Hint": "元：POST-14 价格波动的影响金额下限，如 100"
+}

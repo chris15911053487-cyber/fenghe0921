@@ -1,0 +1,8 @@
+{
+  "Code": "CONV_OUT_BUSITYPE",
+  "Name": "形态转换转出业务类型",
+  "U_Category": "业务口径",
+  "U_Value": "205",
+  "U_DataType": "文字",
+  "U_Hint": "@U_CIOTRN.Code，如 205（O05）"
+}

@@ -1,0 +1,23 @@
+CREATE COLUMN TABLE "FH100"."@U_CIOTRN" (
+    "Code" NVARCHAR(50) NOT NULL,
+    "Name" NVARCHAR(100),
+    "DocEntry" INTEGER NOT NULL,
+    "Canceled" NVARCHAR(1) DEFAULT N,
+    "Object" NVARCHAR(20),
+    "LogInst" INTEGER,
+    "UserSign" INTEGER,
+    "Transfered" NVARCHAR(1) DEFAULT N,
+    "CreateDate" TIMESTAMP,
+    "CreateTime" SMALLINT,
+    "UpdateDate" TIMESTAMP,
+    "UpdateTime" SMALLINT,
+    "DataSource" NVARCHAR(1),
+    "U_TransType" NVARCHAR(20) DEFAULT - NOT NULL,
+    "U_ForType" NVARCHAR(20) DEFAULT - NOT NULL,
+    "U_SrcType" NVARCHAR(20) DEFAULT - NOT NULL,
+    "U_Remark" NVARCHAR(200),
+    "U_OcrCode" NVARCHAR(10),
+    "U_IsProject" NVARCHAR(1) DEFAULT N,
+    "U_IOType" NVARCHAR(30),
+    PRIMARY KEY ("Code")
+)

@@ -1,0 +1,24 @@
+Code	Name	U_IOType	U_TransCode
+I01	采购入库	I	PUR1
+I03	生产入库	I	PP05
+I02	转储入库	I	
+I04	其他入库	I	YF01
+I05	形态转换入库	I	PP12
+I06	采购退货	I	PUR1
+I07	生产返工入库	I	PP05
+I08	委外返工入库	I	WW03
+I90	期初生产入库	I	
+I09	委外入库	I	WW03
+O02	转储出库	O	
+I10	盘点入库	I	IO01
+O01	销售出库	O	DN01
+O03	生产发料	O	PP01
+O04	其他出库	O	YF01
+O05	形态转换出库	O	PP11
+O06	销售退货	I	DN01
+O90	期初生产出库	O	
+O07	生产返工领料	O	PP01
+O08	委外返工领料	O	WW01
+O09	委外出库	O	WW01
+O10	盘点出库	O	IO01
+I11	库存重估入库（当期库存成本）	I	MR01

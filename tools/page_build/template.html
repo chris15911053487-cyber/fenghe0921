@@ -1,0 +1,1232 @@
+<title>FH100 成本核算关系图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: four-lane ledger map (sources → views → procedures → MTC tables) with a detail panel; tabs for lineage and issues */
+:root{
+  --bg:#F3F6F5; --surface:#FFFFFF; --ink:#16222B; --muted:#5B6970; --line:#CCD5D3; --soft:#E6ECEA;
+  --proc:#E3EEF0; --proc-line:#2D5F6E; --accent:#0E7A6B; --read:#7E8D93; --warn:#B9740F; --warn-bg:#FBF1DF;
+  --crit:#B03F2C; --crit-bg:#F8E5E1; --good:#2F7D46; --good-bg:#E3F1E7; --b1:#EAEFEE; --udt:#F6F3EC; --view:#EEF0F7;
+  --sans:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,"PingFang SC","Microsoft YaHei",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11171A; --surface:#182126; --ink:#E3EAEC; --muted:#93A2A8; --line:#2D3A40; --soft:#202B30;
+  --proc:#1B3139; --proc-line:#6FB3C4; --accent:#3DBBA6; --read:#6A7A80; --warn:#E3A645; --warn-bg:#3A2D14;
+  --crit:#E8735E; --crit-bg:#3B201B; --good:#6CC287; --good-bg:#1A3222; --b1:#1D272B; --udt:#262620; --view:#1E2230; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11171A; --surface:#182126; --ink:#E3EAEC; --muted:#93A2A8; --line:#2D3A40; --soft:#202B30;
+  --proc:#1B3139; --proc-line:#6FB3C4; --accent:#3DBBA6; --read:#6A7A80; --warn:#E3A645; --warn-bg:#3A2D14;
+  --crit:#E8735E; --crit-bg:#3B201B; --good:#6CC287; --good-bg:#1A3222; --b1:#1D272B; --udt:#262620; --view:#1E2230; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55}
+.wrap{padding-inline:20px;padding-block:20px 40px;max-width:1560px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;margin-bottom:14px}
+h1{font-size:22px;font-weight:600;margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted)}
+.stats b{color:var(--ink);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}
+nav.tabs button{font:inherit;background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+nav.tabs button:focus-visible,.chip:focus-visible,.tog:focus-visible,.fbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+@media (max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{flex:none}
+.tog{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
+.tog[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.togs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.graphbox{overflow-x:auto;padding:4px 0}
+svg#g{display:block}
+.colhead{font-size:11.5px;letter-spacing:.06em;fill:var(--muted);font-weight:600}
+.grphead{font-size:11px;letter-spacing:.05em;fill:var(--muted)}
+.node{cursor:pointer}
+.node rect.box{stroke-width:1.2}
+.node.proc rect.box{fill:var(--proc);stroke:var(--proc-line)}
+.node.mtc rect.box{fill:var(--surface);stroke:var(--ink);stroke-opacity:.55}
+.node.b1 rect.box{fill:var(--b1);stroke:var(--line)}
+.node.udt rect.box{fill:var(--udt);stroke:var(--line);stroke-dasharray:3 2}
+.node.view rect.box{fill:var(--view);stroke:var(--line)}
+.node text.nm{font-family:var(--mono);font-size:11.5px;fill:var(--ink);font-weight:500}
+.node text.ds{font-size:11px;fill:var(--muted)}
+.node .stepc{fill:var(--proc-line)}
+.node .stept{fill:var(--surface);font-family:var(--mono);font-size:10.5px;font-weight:600}
+.node .badge{fill:var(--warn)}
+.node .badget{fill:var(--surface);font-size:10px;font-weight:600;font-family:var(--mono)}
+.node:hover rect.box,.node.sel rect.box{stroke-width:2.2}
+.node.sel rect.box{stroke:var(--accent)}
+.node.dim{opacity:.22}
+.edge{fill:none;stroke-width:1.1;opacity:.16;transition:opacity .15s}
+.edge.r{stroke:var(--read);stroke-dasharray:4 3}
+.edge.w{stroke:var(--accent)}
+.edge.m{stroke:var(--crit)}
+.edge.on{opacity:.95;stroke-width:1.7}
+.edge.off{opacity:.03}
+.edge.hide{display:none}
+@media (prefers-reduced-motion:reduce){.edge{transition:none}}
+aside.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);padding:16px 18px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:1000px){aside.panel{position:static;max-height:none}}
+.panel h2{font-size:16px;margin:0;font-family:var(--mono);font-weight:600;word-break:break-all}
+.panel .kind{display:inline-block;font-size:11px;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+.panel p{margin:8px 0}
+.panel h3{font-size:12px;letter-spacing:.06em;color:var(--muted);margin:16px 0 6px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font:inherit;font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:5px;padding:2px 7px;cursor:pointer}
+.chip.w{border-color:var(--accent);color:var(--accent);background:transparent}
+.chip.m{border-color:var(--crit);color:var(--crit);background:transparent}
+.fields{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--soft);border-radius:6px;padding:8px 10px;margin:0;white-space:pre-wrap;word-break:break-word}
+.iss{border-top:1px solid var(--line);padding:8px 0;font-size:13px}
+.iss:first-of-type{border-top:0}
+.pill{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;font-weight:600;white-space:nowrap}
+.pill.open{background:var(--warn-bg);color:var(--warn)}
+.pill.done{background:var(--good-bg);color:var(--good)}
+.pill.risk{background:var(--crit-bg);color:var(--crit)}
+.muted{color:var(--muted)}
+.hint{font-size:13px;color:var(--muted)}
+.steps{margin:6px 0 0;padding-left:18px}
+.steps li{margin:2px 0}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;letter-spacing:.03em;border-bottom:1px solid var(--line);padding:8px 10px;white-space:nowrap}
+table.t td{border-bottom:1px solid var(--soft);padding:9px 10px;vertical-align:top}
+table.t td.n{font-family:var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;width:2.5em}
+table.t code,.mono{font-family:var(--mono);font-size:12px}
+.tscroll{overflow-x:auto}
+.loopnote{font-size:12.5px;color:var(--accent);font-weight:500}
+.filters{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.fbtn{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 11px;cursor:pointer}
+.fbtn[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.intro{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13.5px;color:var(--muted);max-width:80ch}
+/* field impact */
+.fgrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.fgrid{grid-template-columns:minmax(0,1fr)}}
+.flist{padding:12px;max-height:calc(100vh - 140px);overflow:auto;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:860px){.flist{position:static;max-height:340px}}
+.flist input{width:100%;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.fgrp{font-size:11.5px;letter-spacing:.05em;color:var(--muted);margin:12px 0 4px;font-weight:600}
+.fitem{display:block;width:100%;text-align:left;font:inherit;font-family:var(--mono);font-size:12px;background:none;border:0;border-radius:5px;padding:4px 6px;color:var(--ink);cursor:pointer}
+.fitem:hover{background:var(--soft)}
+.fitem[aria-current="true"]{background:var(--ink);color:var(--surface)}
+.fitem:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.fdetail{padding:16px 18px}
+.fdetail h2{font-family:var(--mono);font-size:17px;margin:0;word-break:break-word}
+.dirs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:14px}
+@media (max-width:1100px){.dirs{grid-template-columns:minmax(0,1fr)}}
+.dir h3{font-size:13px;margin:0 0 4px;font-weight:600}
+.dir .cap{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.hop{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;border-top:1px solid var(--soft);padding:7px 0}
+.hop .d{font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:2px}
+.hop .via{font-size:12.5px;color:var(--muted);margin-top:2px}
+.hop .via b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:12px}
+.cyc{font-size:12.5px;color:var(--accent);margin-top:8px}
+/* troubleshooting */
+.method{padding:14px 18px;border-bottom:1px solid var(--line)}
+.method ol{margin:6px 0 0;padding-left:20px;max-width:90ch}
+.method li{margin:4px 0}
+.sym{padding:4px 0}
+.ckwrap{padding:6px 18px 18px}
+details.ck{border-top:1px solid var(--line);padding:10px 0}
+details.ck summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;list-style:none}
+details.ck summary::-webkit-details-marker{display:none}
+details.ck summary::before{content:"▸";color:var(--muted);font-size:11px}
+details.ck[open] summary::before{content:"▾"}
+.ckid{font-family:var(--mono);font-weight:600;font-size:13px}
+.ckt{font-weight:500}
+.ckstep{font-size:12px;color:var(--muted)}
+.ckbody{padding:8px 0 0 18px;display:grid;gap:8px}
+.ckbody .row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;font-size:13px}
+.ckbody .lab{color:var(--muted);font-size:12px;padding-top:1px}
+pre.sql{font-family:var(--mono);font-size:11.5px;line-height:1.5;background:var(--soft);border-radius:6px;padding:10px 12px;margin:0;overflow-x:auto;white-space:pre;max-height:420px}
+.copy{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:5px;padding:2px 10px;cursor:pointer;justify-self:start}
+.flash{animation:fl 1.2s ease-out}
+@keyframes fl{0%{background:var(--warn-bg)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+/* source viewer */
+.sgrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+.slist{padding:12px;max-height:calc(100vh - 140px);overflow:auto;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:860px){.slist{position:static;max-height:320px}}
+.slist input{width:100%;font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);margin-bottom:6px}
+.sitem{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;font:inherit;font-family:var(--mono);font-size:12px;background:none;border:0;border-radius:5px;padding:4px 6px;color:var(--ink);cursor:pointer}
+.sitem:hover{background:var(--soft)}
+.sitem[aria-current="true"]{background:var(--ink);color:var(--surface)}
+.sitem .cnt{font-size:11px;color:var(--warn);flex:none}
+.sitem[aria-current="true"] .cnt{color:var(--surface)}
+.sitem:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sview{min-width:0}
+.shead{padding:14px 18px;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.shead h2{font-family:var(--mono);font-size:16px;margin:0;word-break:break-all}
+.sbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sbar input{font:inherit;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:min(260px,100%)}
+.hits{display:flex;flex-wrap:wrap;gap:4px;max-height:96px;overflow:auto}
+.hit{font:inherit;font-family:var(--mono);font-size:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;padding:1px 6px;cursor:pointer}
+.codebox{display:grid;grid-template-columns:auto minmax(0,1fr);max-height:calc(100vh - 220px);overflow:auto;position:relative;background:var(--surface);border-radius:0 0 10px 10px}
+.codebox pre{margin:0;font-family:var(--mono);font-size:12px;line-height:18px;padding:10px 0}
+.gutter{color:var(--muted);text-align:right;padding:10px 10px 10px 14px!important;border-right:1px solid var(--soft);user-select:none;background:var(--bg);position:sticky;left:0;z-index:1}
+.code{padding:10px 16px!important;white-space:pre;tab-size:4}
+.code .k{color:var(--proc-line);font-weight:600}
+.code .c{color:var(--good);font-style:italic}
+.code .s{color:var(--crit)}
+.code .q{color:var(--ink)}
+.lmark{position:absolute;left:0;right:0;height:18px;background:var(--warn-bg);pointer-events:none;mix-blend-mode:multiply}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .lmark{mix-blend-mode:screen;opacity:.5}}
+:root[data-theme="dark"] .lmark{mix-blend-mode:screen;opacity:.5}
+/* live (local server) mode */
+.livebar{padding:12px 18px;border-bottom:1px solid var(--line);display:grid;gap:10px;background:var(--bg)}
+.livebar .row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.livebar select,.livebar input{font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.livebar input{width:150px}
+.runbtn{font:inherit;font-size:12.5px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);border-radius:5px;padding:3px 12px;cursor:pointer}
+.runbtn[disabled]{opacity:.5;cursor:default}
+.runbtn.ghost{background:transparent;color:var(--accent)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
+.dot.on{background:var(--good)}
+.runrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.runres{max-height:380px;overflow:auto;border:1px solid var(--soft);border-radius:6px}
+.runres table.t td,.runres table.t th{padding:5px 8px;font-size:12px;white-space:nowrap}
+.runres td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.sumlist{display:grid;gap:2px;font-size:13px}
+.sumlist button{all:unset;cursor:pointer;display:grid;grid-template-columns:44px 78px minmax(0,1fr) auto;gap:8px;padding:3px 4px;border-radius:4px}
+.sumlist button:hover{background:var(--soft)}
+.sumlist button:focus-visible{outline:2px solid var(--accent)}
+.pill.pass{background:var(--good-bg);color:var(--good)}
+.pill.fail{background:var(--crit-bg);color:var(--crit)}
+.pill.info{background:var(--soft);color:var(--ink)}
+.pill.run{background:var(--warn-bg);color:var(--warn)}
+/* db sync & diff */
+.ssync{display:grid;gap:6px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);font-size:12.5px}
+.badge2{font-family:var(--sans);font-size:10.5px;border-radius:3px;padding:0 4px;margin-left:4px;flex:none}
+.badge2.db{background:var(--good-bg);color:var(--good)}
+.badge2.chg{background:var(--warn-bg);color:var(--warn)}
+.badge2.new{background:var(--crit-bg);color:var(--crit)}
+.sitem[aria-current="true"] .badge2{background:transparent;color:var(--surface);border:1px solid var(--surface)}
+.vtabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vtabs button{font:inherit;font-size:12px;border:0;background:var(--surface);color:var(--ink);padding:3px 10px;cursor:pointer}
+.vtabs button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.code.diff{padding:10px 0!important}
+.code.diff .d{display:block;padding:0 16px}
+.code.diff .d-add{background:var(--good-bg)}
+.code.diff .d-del{background:var(--crit-bg)}
+.code.diff .d-gap{color:var(--muted);font-style:italic;background:var(--soft)}
+.code.diff .ln{color:var(--muted);user-select:none}
+.syncres{display:grid;gap:4px;font-size:12.5px}
+.connpill{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px;border:1px solid var(--good);background:var(--good-bg);color:var(--ink);border-radius:8px;padding:6px 12px;margin-bottom:12px}
+.connpill b{font-family:var(--mono);font-weight:600}
+.connpill .sep{color:var(--muted)}
+.verbtn{font:inherit;font-size:12.5px;font-family:var(--mono);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:2px 10px;cursor:pointer}
+.verbtn:hover{border-color:var(--accent)}
+.verbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.vlog{padding:6px 18px 18px;max-width:90ch}
+.vitem{border-top:1px solid var(--line);padding:12px 0;display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 16px}
+.vitem:first-child{border-top:0}
+.vitem .vv{font-family:var(--mono);font-weight:600;font-size:15px}
+.vitem .vd{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.vitem ul{margin:0;padding-left:18px}
+.vitem li{margin:2px 0}
+.vcur{display:inline-block;font-size:11px;border-radius:999px;padding:0 8px;background:var(--good-bg);color:var(--good);margin-left:6px;font-family:var(--sans);font-weight:600}
+@media (max-width:600px){.vitem{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>FH100 成本核算关系图</h1>
+      <p class="sub">SAP Business One · <span class="mono">MTC_COST_PROC_0000</span> 一键计算（数据库当前版本） · <button class="verbtn" id="verbtn" title="查看版本记录"></button></p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="connpill" id="connpill" hidden></div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-graph" aria-selected="true" data-tab="graph">关系图</button>
+    <button role="tab" id="tab-fields" aria-selected="false" data-tab="fields">字段影响</button>
+    <button role="tab" id="tab-debug" aria-selected="false" data-tab="debug">数据排查</button>
+    <button role="tab" id="tab-source" aria-selected="false" data-tab="source">源代码</button>
+    <button role="tab" id="tab-lineage" aria-selected="false" data-tab="lineage">主线血缘</button>
+    <button role="tab" id="tab-issues" aria-selected="false" data-tab="issues">待确认问题</button>
+    <button role="tab" id="tab-versions" aria-selected="false" data-tab="versions">版本记录</button>
+  </nav>
+
+  <section id="view-fields" class="fgrid" hidden>
+    <div class="card flist">
+      <label for="fsearch" class="hint" style="display:block;margin-bottom:6px">选一个字段，看它从哪来、会影响什么</label>
+      <input id="fsearch" type="search" placeholder="搜索字段，如 Price、IgnQty">
+      <div id="fitems"></div>
+    </div>
+    <div class="card fdetail" id="fdetail"></div>
+  </section>
+
+  <section id="view-debug" class="card" hidden>
+    <div class="method">
+      <h2 style="font-size:16px;margin:0">数据对不上时，按这个顺序查</h2>
+      <ol>
+        <li><b>先跑校验，从小号看起。</b>C01–C20 按计算顺序排列，越靠前越接近数据源头。第一个不通过的校验，通常就是问题的源头；先修它，后面的差异往往跟着消失。</li>
+        <li><b>按症状找入口。</b>已经知道是哪类数字不对时，用下表直接跳到对应的校验。</li>
+        <li><b>锁定到具体物料或订单后，用 T01 / T02 追溯。</b>T01 列出一个物料本期每条出入库的单价和 <span class="mono">PriceMemo</span>（每次改写都会追加“从哪个过程哪一步写入”）；T02 按“订单头 → 领料 → 费用 → 成本结果 → 完工入库”展开一张订单。</li>
+        <li><b>在“字段影响”里看上游。</b>找到出错的字段后，看它的上游字段，逐个回查；需要评估影响时看下游。</li>
+      </ol>
+      <p class="hint" style="margin:8px 0 0">全部查询只读，不改数据。原文件在仓库 <span class="mono">checks/MTC_COST_CHECKS.sql</span>，把每段开头的 <span class="mono">'2026-08'</span> 改成要查的账期后执行。</p>
+    </div>
+    <div class="livebar" id="livebar"></div>
+    <div class="tscroll"><table class="t" id="symptoms"></table></div>
+    <div class="ckwrap" id="checks"></div>
+  </section>
+
+  <section id="view-graph" class="layout">
+    <div class="card">
+      <div class="toolbar">
+        <div class="legend">
+          <span><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="var(--read)" stroke-width="1.6" stroke-dasharray="4 3"/></svg>读取</span>
+          <span><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="var(--accent)" stroke-width="1.8"/></svg>写入中间表</span>
+          <span><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="var(--crit)" stroke-width="1.8"/></svg>改写 B1 / 自定义表</span>
+          <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--warn)"/></svg>待确认问题数</span>
+        </div>
+        <div class="togs">
+          <button class="tog" id="t-chain" aria-pressed="false" title="沿读写关系一路追到最上游和最下游">显示完整上下游</button>
+          <button class="tog" id="t-ext" aria-pressed="false" title="隐藏 B1 标准表和自定义表的连线，只看中间表">只看中间表连线</button>
+        </div>
+      </div>
+      <div class="graphbox"><svg id="g" role="img" aria-label="存储过程与表的读写关系图"></svg></div>
+    </div>
+    <aside class="card panel" id="panel" aria-live="polite"></aside>
+  </section>
+
+  <section id="view-source" class="sgrid" hidden>
+    <div class="card slist">
+      <div id="ssync" class="ssync"></div>
+      <label for="ssearch" class="hint" style="display:block;margin-bottom:6px">按名称筛选，或在全部源码里搜索一个词</label>
+      <input id="ssearch" type="search" placeholder="例如 0401、OWOR2、PriceMemo">
+      <div id="sitems"></div>
+    </div>
+    <div class="card sview" id="sview"></div>
+  </section>
+
+  <section id="view-lineage" class="card" hidden>
+    <div class="intro">成本金额沿一条主线流动：采购入库价 → 物料加权价 → 发料金额 → 订单材料成本 → 完工单价 → 产品加权价，并对 iLevel 0–5 逐层重复，最后进入销售成本和凭证。点击“过程”列可在关系图中定位。</div>
+    <div class="tscroll"><table class="t" id="lineage"></table></div>
+  </section>
+
+  <section id="view-versions" class="card" hidden>
+    <div class="intro" id="vintro"></div>
+    <div class="vlog" id="vlog"></div>
+  </section>
+
+  <section id="view-issues" class="card" hidden>
+    <div class="filters" id="ifilters"></div>
+    <div class="tscroll"><table class="t" id="issues"></table></div>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+// ---------- nodes ----------
+// col 0 = B1 / UDT sources, 1 = views & functions, 2 = procedures (call order), 3 = MTC_COST_ tables
+const N = [
+ // B1 standard
+ {id:"b_item",col:0,grp:"b1",kind:"b1",name:"OITM·OITB·OITT·ITT1",sub:"物料、物料组、BOM",desc:"物料主数据和主数据 BOM。GetItemLevel 用当前 BOM 计算层级；OITM.U_ItemProp 是 CalType 的来源。"},
+ {id:"b_wor",col:0,grp:"b1",kind:"b1",name:"OWOR·WOR1",sub:"B1 生产订单",desc:"SAP 标准生产订单（DocType='202'）。U_OrdType 即 WorType：10、20、30 为生产工单（10 生产计划单、20 包装计划单、30 返工计划单），50 为委外工单。返工单在另一张表 @MTC_OWOR，两张表的 DocEntry 各自独立编号，关联订单时必须同时带 DocType 和 WorEntry。"},
+ {id:"b_ivl",col:0,grp:"b1",kind:"b1",name:"OIVL",sub:"库存过账记录",desc:"0302 带价明细的主来源：按 TransType + CreatedBy + DocLineNum 关联 MTC_VIEW_Document 取 TransCode。排除 S300 报废库、67 转储、18/19 发票（发票单独处理）。"},
+ {id:"b_pur",col:0,grp:"b1",kind:"b1",name:"OPDN·ORPD·OPCH·ORPC",sub:"采购收货/退货/发票/贷项",desc:"采购单据及行表。收货金额优先取 U_InitPrice。0201 会直接 UPDATE PCH1.BaseRef（空串改 NULL）。"},
+ {id:"b_sal",col:0,grp:"b1",kind:"b1",name:"ODLN·ORDN·OINV·ORIN",sub:"销售交货/退货/发票/贷项",desc:"销售单据。ODLN→O01、ORDN→O06；OINV/ORIN 在视图中没有 TransCode。0801 用它们做销售成本结转与暂估（DN03、AR03/AR04）。"},
+ {id:"b_ign",col:0,grp:"b1",kind:"b1",name:"OIGN·OIGE",sub:"收货/发货单",desc:"生产入库、领料、退料、返工、委外、盘点、形态转换和其他出入库都走收发货单，靠表头 U_TrsName（→ @U_CIOTRN）区分。"},
+ {id:"b_gl",col:0,grp:"b1",kind:"b1",name:"OJDT·OBTF·OACT·OPRC·OGAR",sub:"总账、科目、成本中心",desc:"0311 从 OJDT/JDT1（500102、5101*）和 OBTF/BTF1（JZ01/JZ03 待过账）归集费用；OGAR.StockAct 决定凭证存货科目。"},
+ {id:"b_whs",col:0,grp:"b1",kind:"b1",name:"OWHS",sub:"仓库",desc:"OWHS.U_IsCost='Y' 的仓库才计入 0321 的完工与领料数量。"},
+ // UDT
+ {id:"u_owor",col:0,grp:"udt",kind:"udt",name:"@MTC_OWOR·@MTC_WOR1",sub:"返工单",desc:"返工单（DocType='MTC_OWOR'），同样有 U_OrdType（WorType：10/20/30 生产工单、50 委外工单）。DocEntry 与 OWOR 各自独立编号。U_OriginAbs / U_BaseEntry 记录来源订单。每层先算 B1 生产订单，再在下一层开头用本层价格重算返工单（返工单会领用本层产品）。收发货行的 U_MTCOWORNum 存的是它的 DocEntry。"},
+ {id:"u_omrv",col:0,grp:"udt",kind:"udt",name:"@MTC_OMRV·@MTC_OMRV1",sub:"库存重估单",desc:"U_BaseType：WW、MRV1（进 0302，TransCode I11）、ProWW（委外工单差异，进 0311 和 0306）、MRV2（0501 生成的期末零数量差异）。"},
+ {id:"u_iotype",col:0,grp:"udt",kind:"udt",name:"@MTC_COST_IOTYPE",sub:"交易类型及出入方向",desc:"TransCode 字典：Name、U_IOType（入/出）、对应凭证代码。0302/0401/0501 内连它汇总数量金额，不在其中的 TransCode 会被忽略。O06 销售退货方向为“入”。"},
+ {id:"u_ciotrn",col:0,grp:"udt",kind:"udt",name:"@U_CIOTRN",sub:"收发货业务类型",desc:"Code=BusiType（如 304 生产退料、204/205 形态转换），Name=U_YWLX，U_IOType=TransCode，U_TransType=大类（B01 工单产出）。"},
+ {id:"u_qcprice",col:0,grp:"udt",kind:"udt",name:"@MTC_COST_QCPRICE(1)",sub:"手工补价",desc:"按账期维护的物料单价 U_Price；U_IsY='Y' 时强制覆盖。用于其他出入库、生产退料等价格为 0 的行。"},
+ {id:"u_time",col:0,grp:"udt",kind:"udt",name:"@MTC_COST_TIME(1)",sub:"单位工时",desc:"物料单位工时 U_Time，0312 按“工时 × 完工数”分摊费用。0109 负责展开写入。"},
+ {id:"u_mrv",col:0,grp:"udt",kind:"udt",name:"@MTC_MRVTYPE",sub:"重估类型及科目",desc:"0501 生成 MRV2 重估单时取对方科目。"},
+ {id:"u_sal",col:0,grp:"udt",kind:"udt",name:"@MTC_SALORDTYPE·@MTC_PTPRICE",sub:"销售类型、价格表",desc:"0801 区分内贸/外贸、样品销售，以及暂估价格。"},
+ // views / functions
+ {id:"v_fdoc",col:1,kind:"view",name:"MTC_COST_FC_DOCDETAIL",sub:"表函数 · 8 类单据行",desc:"按单据日期取当月采购收货 20、采购退货 21、应付发票 18、应付贷项 19、收货 59、发货 60、销售交货 15、销售退货 16 的行。入库正、出库负；金额取 LineTotal（单据价）。59/60 的 TransCode 是 U_TrsName（业务类型代码），不是 I/O 编码；Base* 改写为所属订单。"},
+ {id:"v_doc",col:1,kind:"view",name:"MTC_VIEW_Document",sub:"视图 · 单据 → TransCode",desc:"13 类单据行合并。ODLN→O01、ORDN→O06、OPDN/OPCH→I01、ORPD/ORPC→I06；59/60 经 U_TrsName → @U_CIOTRN.U_IOType。还把 59/60 的 Base* 改写为所属生产订单，完工入库行 BaseLine 为空。"},
+ {id:"v_pd",col:1,kind:"view",name:"MTC_VIEW_ProductDetail",sub:"视图 · 订单收发明细",desc:"按生产订单汇总的收发明细。0306 只取 ID 3、4，其中 ID 4 写了 WHERE 1=0，实际只用 ID 3“委外费用收货”：PDN1 关联生产收货的金额，扣减采购退货。"},
+ // procedures
+ {id:"p_level",col:2,kind:"proc",step:1,name:"MTC_CO_001GetItemLevel",sub:"物料 BOM 层级",desc:"全部物料先置 -1，无 BOM 的置 0，其余 = 子件最高级别 + 1（最高 8 级）；最后手工覆盖 4 个物料。实际数据 2024-11 至 2026-08 只有 0–5 级。",fields:"U_COILV(FcCode, ItemCode, iLevel, CalType)"},
+ {id:"p0106",col:2,kind:"proc",step:2,name:"0106_OWORLIST",sub:"订单计划结构",desc:"取 OWOR/@MTC_OWOR 的计划数和 WOR1/@MTC_WOR1 的各物料计划用量（排除取消）。两者之比就是 0402 的“计划用量比”。"},
+ {id:"p0201",col:2,kind:"proc",step:3,name:"0201_DOCDETAIL",sub:"当期出入库明细",desc:"把表函数 MTC_COST_FC_DOCDETAIL 原样落表，只供 0321 使用；顺带 UPDATE PCH1 把 BaseRef 空串改为 NULL。"},
+ {id:"p0321",col:2,kind:"proc",step:4,name:"0321_OWOR",sub:"当期完工数与领料数",desc:"只统计 OWHS.U_IsCost='Y' 的仓库。头：@U_CIOTRN.U_TransType='B01'（工单产出）的数量 → IgnQty（本期）；行：按订单行汇总领料 → IgeQty。排除取消，已关闭订单仍参与。"},
+ {id:"p0301",col:2,kind:"proc",step:5,name:"0301_INVNT",sub:"库存清单与期初",desc:"物料 × 成本类型一行。期初 = 上期 QM_*；开账期 2024-11 取 INVNT_QC；2025-04 用 OIVL 覆盖部分期初并手工修正 2 个物料。"},
+ {id:"p0302",col:2,kind:"proc",step:6,name:"0302 + 0303",sub:"带价明细、外购料加权价",desc:"0303 从 OIVL、应付发票价差、应付贷项价差、@MTC_OMRV（WW/MRV1）重建明细；0302 汇总出入库数量，按 (期初金额 + 采购入库金额) ÷ (期初数量 + 采购入库数量) 算外购料加权价，并给其他出入库定价。"},
+ {id:"p0311",col:2,kind:"proc",step:7,name:"0311_PRODUCTEXP_ADD",sub:"费用归集",desc:"四类：人工/制造费用（OJDT 500102、5101*）、关单差异（OBTF JZ01/JZ03）、公摊材料（其他出入库与盘点中科目为 5101* 的行）、委外工单差异（@MTC_OMRV ProWW）。"},
+ {id:"p0312",col:2,kind:"proc",step:8,name:"0312_PRODUCTEXP_PRC",sub:"费用按工时分摊",desc:"四个费用池（制造/包装车间 × 制造/人工费用，P017 为包装车间），先按 工时 × 完工数 分到物料，再按完工数分到订单，以负数写 0321_OWOR2。"},
+ {id:"p0306",col:2,kind:"proc",step:9,name:"0306_WW",sub:"委外加工费",desc:"MTC_VIEW_ProductDetail ID 3 的委外费用收货 + @MTC_OMRV ProWW 差异，只处理 B1 生产订单（DocType='202'），写 0321_OWOR2（CostCode 20）。"},
+ {id:"p0401",col:2,kind:"proc",step:10,name:"0401_CAL + 0402",sub:"逐级成本 iLevel 0→5",desc:"iLevel 0–5 每层：汇总订单本期材料与费用 → 0402 算完工单价与在产品 → 完工入库定价 → 重算加权价 → 本层物料发料定价 → 写入上一层订单领料。返工单（WorType 30）由 0402_CAL_OWOR_30 单独算。最后给销售出入库定价、重算期末结存。",fields:"完工单价 = (完工材料 + 2ManExp + 3LabAmount + 4WWExp) ÷ 本期完工数\n完工材料按物料：\n· 计划数 − 本期完工 ≤ 0 → 累计实际领料\n· 领料比 ≥ 计划用量比 → 领料单价 × 本期完工 × 计划用量比\n· 领料比 < 计划用量比 → 累计领料 ÷ 累计完工 × 本期完工"},
+ {id:"p0501",col:2,kind:"proc",step:11,name:"0501_Diff",sub:"期末零数量差异",desc:"QM_Qty=0 但 QM_Amount≠0 的物料，重建 MRV2 重估单（@MTC_OMRV），金额 = −QM_Amount；再把 MRV2 行追加进 0302 并重算 0301 最终单价。"},
+ {id:"p4001",col:2,kind:"proc",step:12,name:"MTC_PRT_CO4001",sub:"在产品静态表",desc:"IsInsert='Y' 时重写本期 0322_OWOR_ZCP：在产品 = 累计领料 − 累计完工材料 − 关单差异（只含材料）。本期关闭的订单把在产品转为关单差异；委外工单从 2026-08 起才这样处理。"},
+ {id:"p4011",col:2,kind:"proc",step:13,name:"MTC_RPT_CO4011 ×2",sub:"在产品明细（订单 × 材料）",desc:"生产工单、委外工单各调一次。累计完工 ≥ 计划数 → 0（ZERO）；否则在产品 = 累计领料金额 − 累计完工 × 单位计划用量 × 平均领料单价（ZCP）。JZCY='Y' 时把与 ZCP 表头的差额整笔挤进金额最大的材料。"},
+ {id:"p0801",col:2,kind:"proc",step:14,name:"0801_TOOJDT",sub:"生成凭证行",desc:"按凭证类型生成借贷行：MR01、MR02、YF01、PP01、WW01、IO01、IO02、PP05、WW03、DN01–DN04、AR03、AR04、PP04。存货科目取 OGAR.StockAct。只写中间表，过账在库外完成。"},
+ // MTC tables
+ {id:"t_coilv",col:3,kind:"mtc",name:"U_COILV",sub:"物料层级",desc:"FcCode × ItemCode 的层级（iLevel）与 CalType。决定参与计算的物料范围和 0401 的计算顺序。无主键，ItemCode 为 NVARCHAR(20)。",fields:"FcCode, ItemCode, ItemName, ItmsGrpCod, iLevel, CalType"},
+ {id:"t_0106",col:3,kind:"mtc",name:"0106_OWORLIST(1)",sub:"订单计划数 / 计划用量",desc:"头：订单计划数 Quantity；行：每个用料物料的计划用量 Quantity。",fields:"DocType, WorType, WorEntry, ItemCode, iLevel, Quantity\n行表另有 LineNum"},
+ {id:"t_0201",col:3,kind:"mtc",name:"0201_DOCDETAL",sub:"出入库单据行",desc:"每行一条单据行；TransCode 存的是 59/60 的业务类型代码（@U_CIOTRN.Code）。",fields:"ObjType, DocEntry, LineNum, TransCode, BaseType, BaseEntry, BaseLine, ItemCode, Quantity, Amount, WhsCode"},
+ {id:"t_owor",col:3,kind:"mtc",name:"0321_OWOR",sub:"订单当期完工与成本",desc:"每张订单每期一行。IgnQty 是本期完工数；成本字段由 0312/0306 先写、0401 按本期数覆盖。",fields:"DocType, WorType, WorEntry, ItemCode, iLevel, Quantity(计划), IgnQty(本期完工), Amount, 1Material, 2ManExp, 3LabAmount, 4WWExp, 5ClosedAmt"},
+ {id:"t_owor1",col:3,kind:"mtc",name:"0321_OWOR1",sub:"订单当期领料",desc:"订单 × 用料物料。IgeQty 为本期领料（负数），Price/Amount 由 0401 用 0302 发料金额回写。",fields:"WorEntry, LineNum, ItemCode, IgeQty, Price, Amount, PriceMemo, IsUpdatePrice"},
+ {id:"t_qc",col:3,kind:"mtc",name:"MTC_COST_INVNT_QC",sub:"开账期初余额",desc:"2024-11 开账期的期初数量金额。没有导出过程写入，应为手工导入。",fields:"FcCode, CostCode, ItemCode, QC_Qty, QC_Price, QC_Amount"},
+ {id:"t_invnt",col:3,kind:"mtc",name:"0301_INVNT",sub:"物料进销存与单价",desc:"物料 × 成本类型的期初、入、出、期末，以及当期成本单价 Price。计价只用 CostCode='20' 的行。",fields:"ItemCode, CostCode, iLevel, QC_*, In_*, Out_*, QM_*（Qty/Price/Amount）, Price, PriceMemo"},
+ {id:"t_dtl",col:3,kind:"mtc",name:"0302_INVNTDETAIL1",sub:"带价出入库明细",desc:"每条库存变动一行，Price/Amount 被多个步骤回写，PriceMemo 记录每次改写来源，IsUpdatePrice 标记定价步骤（NoCost/P/IN01/PP01…）。",fields:"ObjType, DocEntry, LineNum, TransCode, BusiType, BaseType, BaseEntry, BaseLine, ItemCode, iLevel, Quantity, Price, Amount, PriceMemo, IsUpdatePrice, AcctCode"},
+ {id:"t_list",col:3,kind:"mtc",name:"0303_INVNTLIST",sub:"入库汇总列表",desc:"物料 × 交易类型的入库数量金额，用于加权价计算。",fields:"ItemCode, ObjType, TransCode, SourceMemo, Qty, Price, Amt"},
+ {id:"t_exp",col:3,kind:"mtc",name:"0311_PRODUCTEXP_ADD",sub:"费用归集",desc:"费用类型 × 科目 × 成本中心的金额，CalAcctCode 为计入科目（500102 人工、500103 制造）。",fields:"ExpType, AcctCode, OcrCode, IsCal, Amount, CalAcctCode"},
+ {id:"t_prc",col:3,kind:"mtc",name:"0312_PRODUCTEXP_PRC",sub:"费用分摊到物料",desc:"每个费用池按 工时 × 完工数 分到物料的结果。",fields:"CostCode, ExpType, ItemCode, CJCode, IgnQty, Time, TimeTotal, Prc, ExpAmt"},
+ {id:"t_owor2",col:3,kind:"mtc",name:"0321_OWOR2",sub:"订单费用",desc:"订单 × 费用类型，负数记账。CostCode 30 制造、40 人工（0312 写）、20 委外（0306 写）。",fields:"WorEntry, CostCode, ExpType, Amount, IgeQty"},
+ {id:"t_sum",col:3,kind:"mtc",name:"0321_OWOR_SUM(1_REG)",sub:"完工成本结果",desc:"0402 的结果：每层每张订单的完工单价、金额，以及累计数和关单差异；OWOR1_REG 为每个材料的完工转出金额。",fields:"iLevel, WorEntry, ItemCode, IgnQty, Price, Amount, 1Material…4WWExp, *_SUM, CloseDifAmt, Status, CloseDate"},
+ {id:"t_zcp",col:3,kind:"mtc",name:"0322_OWOR_ZCP",sub:"在产品静态表",desc:"按订单的当期与累计成本、在产品、关单差异（中文列名）。",fields:"期间, WorEntry, 当期入库数量, 完工入库单价, 当期/累计 材料·人工·制造·委外, 在产品新, 关单差异, 关单结算期间"},
+ {id:"t_zcp1",col:3,kind:"mtc",name:"0322_OWOR_ZCP1",sub:"在产品明细",desc:"订单 × 材料的在产品；CalType ZERO/ZCP，PriceMemo 写明计算式。",fields:"FcCode, WorEntry, ItemCode, Quantity, Amount, ActIgeQty, ActIgeAmt, IgnQtyPrc, IgnAmtPrc, AvgIgePrice, CalType, PriceMemo"},
+ {id:"t_jdt",col:3,kind:"mtc",name:"0801_TOOJDT·0802",sub:"凭证行与来源明细",desc:"0801_TOOJDT 为凭证借贷行，0802_OJDTBASEDETAIL 为每行对应的来源单据行。库外程序据此过账 OJDT。",fields:"TransCode, TransName, RefDate, AcctCode, Debit, Credit, ProfitCode, CardCode, Project\n0802：U_BaseType/Entry/Line, U_ItemCode, U_Quantity, CostPrice, CostAmt"}
+];
+const byId = {}; N.forEach(n => byId[n.id] = n);
+
+// ---------- edges (data-flow direction) ----------
+const E = [];
+const R = (proc, srcs) => srcs.forEach(s => E.push({from:s, to:proc, t:"r"}));
+const W = (proc, tbls) => tbls.forEach(t => E.push({from:proc, to:t, t:"w"}));
+const M = (proc, tbls) => tbls.forEach(t => E.push({from:proc, to:t, t:"m"}));
+R("v_fdoc",["b_pur","b_sal","b_ign","b_wor","b_item"]);
+R("v_doc",["b_pur","b_sal","b_ign","u_ciotrn","b_wor"]);
+R("v_pd",["b_ign","b_pur","b_wor","b_ivl","b_gl"]);
+R("p_level",["b_item"]); W("p_level",["t_coilv"]);
+R("p0106",["b_wor","u_owor","b_item","t_coilv"]); W("p0106",["t_0106"]);
+R("p0201",["v_fdoc"]); W("p0201",["t_0201"]); M("p0201",["b_pur"]);
+R("p0321",["t_0201","b_wor","u_owor","u_ciotrn","b_whs","b_item","t_coilv"]); W("p0321",["t_owor","t_owor1"]);
+R("p0301",["t_invnt","t_qc","t_coilv","b_item","b_ivl"]); W("p0301",["t_invnt"]);
+R("p0302",["b_ivl","b_pur","u_omrv","v_doc","t_coilv","b_item","u_iotype","u_qcprice","t_invnt"]); W("p0302",["t_dtl","t_list","t_invnt"]);
+R("p0311",["b_gl","t_dtl","b_ign","u_omrv","b_wor","b_item","t_coilv"]); W("p0311",["t_exp"]);
+R("p0312",["t_exp","t_owor","u_time","b_item"]); W("p0312",["t_prc","t_owor2","t_owor"]);
+R("p0306",["v_pd","t_owor","u_omrv","t_coilv"]); W("p0306",["t_owor2","t_owor"]);
+R("p0401",["t_owor","t_owor1","t_owor2","t_0106","t_invnt","t_dtl","t_list","t_coilv","u_iotype","u_qcprice","u_owor","b_wor","b_item"]); W("p0401",["t_sum","t_dtl","t_list","t_invnt","t_owor","t_owor1"]);
+R("p0501",["t_invnt","t_dtl","u_iotype","u_mrv","b_gl","b_item"]); W("p0501",["t_dtl","t_invnt"]); M("p0501",["u_omrv"]);
+R("p4001",["t_sum","t_owor1","b_wor","u_owor","b_item","b_gl"]); W("p4001",["t_zcp"]);
+R("p4011",["t_zcp","t_owor","t_owor1","b_wor","u_owor"]); W("p4011",["t_zcp1"]);
+R("p0801",["t_invnt","t_dtl","t_exp","u_omrv","u_owor","u_sal","u_ciotrn","b_sal","b_ign","b_gl","b_wor","b_item"]); W("p0801",["t_jdt"]);
+
+// ---------- issues ----------
+// st: open 待确认, done 已澄清, risk 风险提示
+const I = [
+ {n:1,src:{"name": "MTC_COST_PROC_0402_CAL_OWOR", "q": "\"Quantity\"-IFNULL(T0.\"IgnQty\",0)>0"},st:"open",nodes:["p0401","t_owor"],t:"0402 判断订单是否完工，用的是本期完工数而不是累计完工数",i:"跨月完工的订单走不到“取全部实际领料”的分支，超领材料留在在产品；CO4001 关单时会转为关单差异"},
+ {n:2,st:"open",nodes:["p0401"],t:"“领少了”分支用 累计领料 ÷ 累计完工 × 本期完工，没有扣除以前月份已结转的金额",i:"跨月订单可能多转或少转"},
+ {n:3,st:"open",nodes:["p0401","t_sum"],t:"人工、制造、委外费用全部由本期完工承担；本期完工数为 0 时 Price 为 NULL",i:"有费用但本期未完工的订单，费用停在 0321_OWOR_SUM，不结转到入库明细"},
+ {n:4,st:"open",nodes:["p0321"],t:"只排除 Status='C' 的订单，已关闭（L）的订单仍参与",i:"需确认是否符合预期"},
+ {n:5,src:{"name": "MTC_COST_PROC_0301_INVNT", "q": "\"QC_Qty\"=88"},st:"risk",nodes:["p0301","t_invnt"],t:"2025-04 修正：代码中写死的一个物料 QC_Qty=88，但 QC_Price = QC_Amount ÷ 8",i:"疑为笔误，该物料期初单价大 11 倍"},
+ {n:6,st:"open",nodes:["p0301","p0801","p4001"],t:"写死历史账期和日期（2024-11、2024-12、2025-04、2024-12-31 等）",i:"只影响这些历史期，重算历史期时要注意"},
+ {n:7,src:{"name": "MTC_COST_PROC_0201_DOCDETAIL", "q": "UPDATE PCH1"},st:"risk",nodes:["p0201","b_pur"],t:"UPDATE PCH1 直接改 B1 标准表",i:"绕过 DI API，属于 SAP 不支持的操作"},
+ {n:8,st:"open",nodes:["p0312"],t:"末尾汇总 0321_OWOR2 时没有按期间过滤",i:"主流程中会被 0401 覆盖，单独运行 0312 时结果偏大"},
+ {n:9,src:{"name": "MTC_COST_PROC_0311_PRODUCTEXP_ADD", "q": "WHERE 1=0"},st:"open",nodes:["p0311"],t:"一段 WHERE 1=0 的失效代码写死了 P016 金额 32710.04",i:"当前不生效；去掉条件会引入固定金额"},
+ {n:10,st:"open",nodes:[],t:"多个过程的头部注释从别处复制，与实际功能不符",i:"以代码为准"},
+ {n:11,st:"open",nodes:["u_iotype","p0801"],t:"配置表把 I05/O05 对应到 PP12/PP11，OTRC 中没有这两个代码；0801 实际按 IO02 生成",i:"按配置表取凭证代码的程序会找不到"},
+ {n:12,st:"open",nodes:["u_iotype"],t:"I02/O02（转储）、I90/O90（期初生产）已配置但代码未引用",i:"转储被排除符合预期；I90/O90 需确认用途"},
+ {n:13,st:"risk",nodes:["v_doc","p0302","b_ivl"],t:"视图没覆盖的 OIVL 类型（13/14 直接出库发票、162 重估、期初、库存过账）和 U_TrsName 为空的收发货，TransCode 为空",i:"0302/0401 内连 @MTC_COST_IOTYPE 时被静默忽略，期末数会偏离实际库存"},
+ {n:14,st:"risk",nodes:["p0302","b_pur"],t:"找不到来源采购收货的应付发票，金额置 0 但数量照常入库",i:"直接入库的应付发票以 0 成本入库，拉低加权价"},
+ {n:15,st:"open",nodes:["v_doc","v_fdoc"],t:"59/60 按单号 DocNum 关联 OWOR，而不是 DocEntry",i:"多编号序列导致单号重复时，同一条记录会被写入多次"},
+ {n:16,st:"done",nodes:["v_doc","u_owor"],t:"MTC_OWOR 的 BaseEntry 取 U_MTCOWORNum",i:"已澄清：该字段存的是 DocEntry，映射正确"},
+ {n:17,st:"open",nodes:["v_pd","p0306"],t:"委外费用按收货日期归期，但扣减的是全部采购退货，不分退货日期",i:"跨月退货会改变原月份；原月份已锁定时，这笔退货不进任何月份"},
+ {n:18,src:{"name": "MTC_VIEW_ProductDetail", "q": "WHERE 1=0"},st:"open",nodes:["v_pd","p0306"],t:"ID 4“委外费用发票暂估差异”写了 WHERE 1=0",i:"委外发票差额不从这里进成本，需确认是否由 @MTC_OMRV 承接"},
+ {n:19,st:"done",nodes:["p4001"],t:"0000 调用 CO4001 只传 6 个参数，不写静态表",i:"已澄清：那是旧版 0000；当前版本传 'Y','Y'，会写表"},
+ {n:20,src:{"name": "MTC_CO_001GetItemLevel", "q": "CNTBOMLEVEL <9"},st:"risk",nodes:["p_level","t_coilv","p0401"],t:"层级最高可到 8，但 0401 只算 0–5",i:"已核对各期只有 0–5 级；5 级物料数量在增长，需每月巡检"},
+ {n:21,st:"open",nodes:["p_level"],t:"层级按当前主数据 BOM 计算，不看订单实际用料，也不按历史回溯；4 个物料手工改级",i:"用料与 BOM 不一致时可能上层先于下层计算"},
+ {n:22,st:"open",nodes:["p0321","p0401","t_owor1"],t:"领料数量来自 0201（U_IsCost 仓库），领料金额来自 0302（OIVL，排除 S300）",i:"两边仓库口径不同时，0321_OWOR1.Price 会失真"},
+ {n:23,st:"open",nodes:["t_coilv"],t:"U_COILV.ItemCode 为 NVARCHAR(20)，B1 物料编码最长 50 位",i:"出现超长编码时 GetItemLevel 插入报错，一键计算失败"},
+ {n:24,st:"open",nodes:["p4001"],t:"委外工单关单逻辑写死 2026-07、2026-08",i:"重算 2026-08 之前的历史期时需注意"},
+ {n:25,src:{"name": "MTC_RPT_CO4011", "q": "ORDER BY \"Amount\" DESC"},st:"open",nodes:["p4011","p0401","t_zcp1"],t:"明细表与 0402 的在产品算法不同，差额被整笔挤进金额最大的材料",i:"可用 JZCY='N' 单独运行查看每张订单的差额，差额大的就是 0402 结转偏差的线索"},
+ {n:26,st:"open",nodes:["p4011"],t:"领料按 WOR1 计划物料内连，代用料、补料不进明细",i:"这部分在产品变成差额"},
+ {n:28,src:{"name": "MTC_COST_PROC_0401_CAL", "q": "GROUP BY T2.\"BPLId\",T2.\"WorEntry\""},st:"risk",nodes:["p0401","t_owor","t_sum"],t:"0401 在 iLevel 3、4、5 汇总订单材料和费用时只按 WorEntry 关联，没有带 DocType（0–2 级带了）",i:"B1 生产订单与返工单（MTC_OWOR） DocEntry 相同时，202 订单的费用被重复计入，完工成本虚增。2026-08 的 C11 显示制造费用和人工费用都多计；用 C17 逐单定位。已对照数据库当前版本确认：这三段代码与导出包一致，问题仍然存在。T03 证实同号订单毫无业务关联；受影响订单的费用恰好是同号返工单费用的 2 倍。C12 证实受影响订单本期都没有完工（完工单价为空），2026-08 的库存、入库成本和凭证未受影响，受影响的是订单层面的成本和在产品报表的成本列"},
+ {n:27,st:"open",nodes:["p4011"],t:"计划数做分母没有 NULLIF；注释里有订单 308、29222、723 的手工写数和 +53893.65 调整",i:"计划数为 0 的订单会让过程报除零错误"}
+];
+const openCount = id => I.filter(x => x.st !== "done" && x.nodes.includes(id)).length;
+
+// ---------- field lineage ----------
+const L = [
+ {f:"0302_INVNTDETAIL1.Quantity",s:"OIVL.InQty − OutQty",r:"当月；排除 S300、67、18/19",p:"p0302"},
+ {f:"0302_INVNTDETAIL1.Amount（采购类）",s:"PDN1/RPD1 U_InitPrice 或 Price × 数量；OIVL.SumStock；PCH1/RPC1 价差；@MTC_OMRV1.U_Amount",r:"按来源分别取数",p:"p0302"},
+ {f:"0301_INVNT.QC_Qty / QC_Amount",s:"上期 0301_INVNT.QM_*；开账期取 INVNT_QC",r:"上期 = OFPR 中小于本期的最大 Code",p:"p0301"},
+ {f:"0301_INVNT.Price（外购料）",s:"QC + I01/I06/I11 的数量、金额",r:"月末一次加权平均",p:"p0302"},
+ {f:"0302_INVNTDETAIL1.Price / Amount（出库类）",s:"0301_INVNT.Price",r:"Amount = Quantity × Price；缺价用 @MTC_COST_QCPRICE1",p:"p0302"},
+ {f:"0321_OWOR1.Amount / Price",s:"0302 发料金额（O03/O07/O08/O09）",r:"按 BaseType + BaseEntry + BaseLine 归到订单行",p:"p0401"},
+ {f:"0321_OWOR2.Amount（30/40）",s:"0311_PRODUCTEXP_ADD.Amount",r:"按 工时 × 完工数 分到物料，再按完工数分到订单；负数",p:"p0312"},
+ {f:"0321_OWOR2.Amount（20）",s:"MTC_VIEW_ProductDetail ID 3、@MTC_OMRV1（ProWW）",r:"委外加工费",p:"p0306"},
+ {f:"0321_OWOR.1Material…4WWExp",s:"−Σ 0321_OWOR1.Amount；−Σ 0321_OWOR2.Amount",r:"只取本期",p:"p0401"},
+ {f:"0321_OWOR_SUM.Price / Amount",s:"0321_OWOR1（累计）、计划用量比、0321_OWOR 费用与 IgnQty",r:"0402 公式",p:"p0401"},
+ {f:"0302_INVNTDETAIL1.Price（I03/I07/I08/I09 完工入库）",s:"0321_OWOR_SUM.Price",r:"IsUpdatePrice='IN01'",p:"p0401"},
+ {f:"0301_INVNT.Price（自制品）",s:"QC + 0303_INVNTLIST（I01/I03/I07/I08/I09）",r:"加权平均",p:"p0401",loop:"回到第 5 行：用新单价给上一层的发料定价，iLevel 0→5 逐层重复"},
+ {f:"0302_INVNTDETAIL1.Amount（O01/O06/O10）",s:"0301_INVNT.Price",r:"全部层级算完后定价",p:"p0401"},
+ {f:"0301_INVNT.QM_Amount / QM_Price",s:"QC_Amount + Σ 0302_INVNTDETAIL1.Amount",r:"期末结存，作为下期 QC",p:"p0501"},
+ {f:"@MTC_OMRV1.U_Amount（MRV2）",s:"−0301_INVNT.QM_Amount",r:"仅 QM_Qty=0 且 QM_Amount≠0",p:"p0501"},
+ {f:"0801_TOOJDT.Debit / Credit",s:"0302 按 TransCode 分组；0311；@MTC_OMRV1；OJDT/JDT1",r:"存货科目取 OGAR.StockAct",p:"p0801"}
+];
+
+// ---------- field-level graph ----------
+// grp = table / source the field belongs to; node = node in the relationship graph; keys = names used by the checks
+const FN = [
+ {id:"f_bom",grp:"B1 源数据",node:"b_item",name:"OITT/ITT1 · BOM 结构",note:"主数据 BOM，GetItemLevel 用它算层级。"},
+ {id:"f_owor_pq",grp:"B1 源数据",node:"b_wor",name:"OWOR.PlannedQty",note:"订单计划数（@MTC_OWOR 为 U_PlannedQty）。"},
+ {id:"f_wor1_pq",grp:"B1 源数据",node:"b_wor",name:"WOR1.PlannedQty",note:"订单每个用料物料的计划用量（@MTC_WOR1 为 U_PlannedQty）。"},
+ {id:"f_ign",grp:"B1 源数据",node:"b_ign",name:"IGN1/IGE1.Quantity",note:"收货/发货单行数量，经表函数进入 0201。"},
+ {id:"f_trs",grp:"B1 源数据",node:"b_ign",name:"OIGN/OIGE.U_TrsName",note:"收发货单表头的业务类型，关联 @U_CIOTRN.Code。为空时这张单据拿不到 TransCode。"},
+ {id:"f_oivl_q",grp:"B1 源数据",node:"b_ivl",name:"OIVL.InQty / OutQty",note:"库存过账的入/出数量。"},
+ {id:"f_oivl_s",grp:"B1 源数据",node:"b_ivl",name:"OIVL.SumStock",note:"B1 自己算的库存金额，只作为非采购行的初始值，随后被成本单价覆盖。"},
+ {id:"f_pdn",grp:"B1 源数据",node:"b_pur",name:"PDN1/RPD1 · 价格与数量",note:"采购收货、退货行：U_InitPrice 不为 0 时优先，否则 Price（退货取 LineTotal）。"},
+ {id:"f_pch",grp:"B1 源数据",node:"b_pur",name:"PCH1/RPC1.LineTotal",note:"应付发票、贷项行金额，与收货单价比较得出价差。"},
+ {id:"f_jdt",grp:"B1 源数据",node:"b_gl",name:"JDT1 · 借贷（500102、5101*）",note:"当月已过账凭证中的人工费用、制造费用科目。"},
+ {id:"f_btf",grp:"B1 源数据",node:"b_gl",name:"BTF1 · 借贷（JZ01/JZ03）",note:"待过账凭证中的关单差异。"},
+ {id:"f_ogar",grp:"B1 源数据",node:"b_gl",name:"OGAR.StockAct",note:"按物料组、年度确定的存货科目。"},
+ {id:"f_ciotrn",grp:"自定义表",node:"u_ciotrn",name:"@U_CIOTRN.U_IOType / U_TransType",note:"业务类型 → TransCode；U_TransType='B01' 表示工单产出。"},
+ {id:"f_iotype",grp:"自定义表",node:"u_iotype",name:"@MTC_COST_IOTYPE.U_IOType",note:"TransCode 是入还是出。不在这张表里的 TransCode 会被汇总忽略。"},
+ {id:"f_omrv",grp:"自定义表",node:"u_omrv",name:"@MTC_OMRV1.U_Amount",note:"重估单金额：WW、MRV1 进 0302（I11），ProWW 进 0311 和 0306，MR01/MR02 进凭证。"},
+ {id:"f_qcprice",grp:"自定义表",node:"u_qcprice",name:"@MTC_COST_QCPRICE1.U_Price",note:"手工补价；U_IsY='Y' 时强制覆盖。"},
+ {id:"f_time",grp:"自定义表",node:"u_time",name:"@MTC_COST_TIME1.U_Time",note:"物料单位工时，费用分摊权重。没维护工时的物料分不到费用。"},
+ {id:"f_vdoc",grp:"视图 / 表函数",node:"v_doc",name:"MTC_VIEW_Document.TransCode",note:"单据行 → 交易类型。",keys:["MTC_VIEW_Document.TransCode"]},
+ {id:"f_vpd",grp:"视图 / 表函数",node:"v_pd",name:"MTC_VIEW_ProductDetail.Amt（ID 3）",note:"委外费用收货金额，扣减采购退货。"},
+ {id:"f_0201",grp:"视图 / 表函数",node:"t_0201",name:"0201_DOCDETAL.Quantity",note:"表函数取出的单据行数量，按 U_TrsName 分类。"},
+ {id:"f_coilv",grp:"物料层级",node:"t_coilv",name:"U_COILV.iLevel",note:"物料层级，决定 0401 先算谁、后算谁；只计算 0–5 级。",keys:["U_COILV.iLevel"]},
+ {id:"f_0106",grp:"订单计划",node:"t_0106",name:"0106_OWORLIST.Quantity",note:"订单计划数，计划用量比的分母。"},
+ {id:"f_01061",grp:"订单计划",node:"t_0106",name:"0106_OWORLIST1.Quantity",note:"物料计划用量，计划用量比的分子。"},
+ {id:"f_ign_q",grp:"订单当期",node:"t_owor",name:"0321_OWOR.IgnQty",note:"订单本期完工数量。是完工单价的除数，也是费用分摊权重。",keys:["0321_OWOR.IgnQty"]},
+ {id:"f_ige_q",grp:"订单当期",node:"t_owor1",name:"0321_OWOR1.IgeQty",note:"订单行本期领料数量（负数）。",keys:["0321_OWOR1.IgeQty"]},
+ {id:"f_w1_a",grp:"订单当期",node:"t_owor1",name:"0321_OWOR1.Amount / Price",note:"订单行领料金额，由 0401 用出入库明细回写；Price = 金额 ÷ 数量。",keys:["0321_OWOR1.Amount"]},
+ {id:"f_w2_ex",grp:"订单当期",node:"t_owor2",name:"0321_OWOR2.Amount（30 / 40）",note:"订单分到的制造费用（30）和人工费用（40），负数记账。",keys:["0321_OWOR2.Amount"]},
+ {id:"f_w2_ww",grp:"订单当期",node:"t_owor2",name:"0321_OWOR2.Amount（20）",note:"订单的委外加工费，负数记账。",keys:["0321_OWOR2.Amount"]},
+ {id:"f_mat",grp:"订单当期",node:"t_owor",name:"0321_OWOR.1Material",note:"订单本期领料金额合计。"},
+ {id:"f_fee",grp:"订单当期",node:"t_owor",name:"0321_OWOR.2ManExp / 3LabAmount / 4WWExp",note:"订单本期人工、制造、委外费用。",keys:["0321_OWOR.2ManExp","0321_OWOR.3LabAmount","0321_OWOR.4WWExp"]},
+ {id:"f_sum",grp:"订单成本结果",node:"t_sum",name:"0321_OWOR_SUM.Price / Amount",note:"0402 算出的本期完工单价与金额。本期完工数为 0 时 Price 为空。",keys:["0321_OWOR_SUM.Amount","0321_OWOR_SUM.Price"]},
+ {id:"f_sumc",grp:"订单成本结果",node:"t_sum",name:"0321_OWOR_SUM.*_SUM / CloseDifAmt",note:"订单累计完工数、累计材料与费用、关单差异。"},
+ {id:"f_tc",grp:"出入库明细 0302",node:"t_dtl",name:"0302_INVNTDETAIL1.TransCode",note:"交易类型，决定这一行走哪条定价规则、算入还是出。",keys:["0302_INVNTDETAIL1.TransCode"]},
+ {id:"f_q",grp:"出入库明细 0302",node:"t_dtl",name:"0302_INVNTDETAIL1.Quantity",note:"每条库存变动的数量，入正出负。",keys:["0302_INVNTDETAIL1.Quantity"]},
+ {id:"f_a_pur",grp:"出入库明细 0302",node:"t_dtl",name:"0302 金额 · 采购类（I01/I06/I11）",note:"采购入库、退货、发票价差、重估入库的金额，外购料单价的来源。",keys:["0302_INVNTDETAIL1.Amount","0302_INVNTDETAIL1.Price","0302_INVNTDETAIL1.IsUpdatePrice","0302_INVNTDETAIL1.PriceMemo"]},
+ {id:"f_a_out",grp:"出入库明细 0302",node:"t_dtl",name:"0302 单价/金额 · 发料与其他出入库",note:"生产发料、委外出库、返工领料、其他出入库、盘点、形态转换：Amount = 数量 × 0301.Price。",keys:["0302_INVNTDETAIL1.Amount","0302_INVNTDETAIL1.Price","0302_INVNTDETAIL1.IsUpdatePrice","0302_INVNTDETAIL1.PriceMemo"]},
+ {id:"f_a_fin",grp:"出入库明细 0302",node:"t_dtl",name:"0302 单价/金额 · 完工入库（I03/I07/I08/I09）",note:"完工入库行，单价取订单完工单价，IsUpdatePrice='IN01'。",keys:["0302_INVNTDETAIL1.Amount","0302_INVNTDETAIL1.Price","0302_INVNTDETAIL1.IsUpdatePrice","0302_INVNTDETAIL1.PriceMemo"]},
+ {id:"f_a_sal",grp:"出入库明细 0302",node:"t_dtl",name:"0302 金额 · 销售出入库（O01/O06/O10）",note:"销售出库、销售退货、盘点出库，在全部层级算完后定价，进入销售成本。",keys:["0302_INVNTDETAIL1.Amount","0302_INVNTDETAIL1.Price","0302_INVNTDETAIL1.IsUpdatePrice","0302_INVNTDETAIL1.PriceMemo"]},
+ {id:"f_a_mrv",grp:"出入库明细 0302",node:"t_dtl",name:"0302 金额 · MRV2 差异行",note:"0501 追加的期末零数量差异行。",keys:["0302_INVNTDETAIL1.Amount"]},
+ {id:"f_list",grp:"进销存 0301 / 0303",node:"t_list",name:"0303_INVNTLIST.Amt",note:"按物料、交易类型汇总的入库金额，加权价的分子。"},
+ {id:"f_qc0",grp:"进销存 0301 / 0303",node:"t_qc",name:"MTC_COST_INVNT_QC.QC_*",note:"开账期 2024-11 的期初数量金额（手工导入）。"},
+ {id:"f_qc",grp:"进销存 0301 / 0303",node:"t_invnt",name:"0301_INVNT.QC_Qty / QC_Amount",note:"期初数量金额，等于上期期末。",keys:["0301_INVNT.QC_Qty","0301_INVNT.QC_Amount"]},
+ {id:"f_price",grp:"进销存 0301 / 0303",node:"t_invnt",name:"0301_INVNT.Price",note:"物料当期成本单价，所有出库定价都用它。PriceMemo 记录每次改写。",keys:["0301_INVNT.Price","0301_INVNT.PriceMemo"]},
+ {id:"f_inout",grp:"进销存 0301 / 0303",node:"t_invnt",name:"0301_INVNT.In_* / Out_*",note:"本期入库、出库的数量和金额。",keys:["0301_INVNT.In_Amount","0301_INVNT.Out_Amount"]},
+ {id:"f_qm",grp:"进销存 0301 / 0303",node:"t_invnt",name:"0301_INVNT.QM_Qty / QM_Amount",note:"期末结存，下期期初。",keys:["0301_INVNT.QM_Qty","0301_INVNT.QM_Amount"]},
+ {id:"f_exp",grp:"费用",node:"t_exp",name:"0311_PRODUCTEXP_ADD.Amount",note:"归集的人工、制造费用、公摊材料、委外工单差异。",keys:["0311_PRODUCTEXP_ADD.Amount"]},
+ {id:"f_prc",grp:"费用",node:"t_prc",name:"0312_PRODUCTEXP_PRC.ExpAmt",note:"费用分到每个产成品物料的金额。",keys:["0312_PRODUCTEXP_PRC.ExpAmt"]},
+ {id:"f_mrv2",grp:"差异与在产品",node:"u_omrv",name:"@MTC_OMRV1.U_Amount（MRV2）",note:"期末数量为 0 但仍有金额时生成的重估金额。"},
+ {id:"f_zcp",grp:"差异与在产品",node:"t_zcp",name:"0322_OWOR_ZCP.在产品新 / 关单差异",note:"订单在产品材料金额；关单当期转为关单差异。",keys:["0322_OWOR_ZCP.在产品新"]},
+ {id:"f_zcp1",grp:"差异与在产品",node:"t_zcp1",name:"0322_OWOR_ZCP1.Amount",note:"订单 × 材料的在产品明细，与表头的差额被挤进金额最大的材料。",keys:["0322_OWOR_ZCP1.Amount"]},
+ {id:"f_je",grp:"凭证",node:"t_jdt",name:"0801_TOOJDT.Debit / Credit",note:"期末凭证借贷金额。",keys:["0801_TOOJDT.Debit","0801_TOOJDT.Credit"]},
+ {id:"f_acct",grp:"凭证",node:"t_jdt",name:"0801_TOOJDT.AcctCode",note:"凭证行科目。"}
+];
+const fById = {}; FN.forEach(f => fById[f.id] = f);
+// [from, to, procedure node, rule]
+const FE = [
+ ["f_bom","f_coilv","p_level","无 BOM 为 0 级，其余 = 子件最高级别 + 1"],
+ ["f_owor_pq","f_0106","p0106","订单计划数"],
+ ["f_wor1_pq","f_01061","p0106","物料计划用量"],
+ ["f_ign","f_0201","p0201","表函数取当月单据行"],
+ ["f_trs","f_0201","p0201","作为 0201 的 TransCode（业务类型代码）"],
+ ["f_0201","f_ign_q","p0321","业务大类 B01 的数量汇总为本期完工（仅 U_IsCost 仓库）"],
+ ["f_ciotrn","f_ign_q","p0321","U_TransType='B01' 判断是否完工入库"],
+ ["f_0201","f_ige_q","p0321","按订单行汇总领料数量"],
+ ["f_trs","f_vdoc","v_doc","U_TrsName → @U_CIOTRN"],
+ ["f_ciotrn","f_vdoc","v_doc","U_IOType 即 TransCode"],
+ ["f_vdoc","f_tc","p0302","按 OIVL 的单据类型、单号、行号关联取得"],
+ ["f_oivl_q","f_q","p0302","InQty − OutQty"],
+ ["f_tc","f_a_pur","p0302","I01/I06/I11 走采购定价"],
+ ["f_tc","f_a_out","p0302","发料、其他出入库按 0301.Price 定价"],
+ ["f_tc","f_a_fin","p0401","I03/I07/I08/I09 取订单完工单价"],
+ ["f_tc","f_a_sal","p0401","O01/O06/O10 最后定价"],
+ ["f_tc","f_inout","p0401","经 @MTC_COST_IOTYPE 判断入或出；识别不了的行被忽略"],
+ ["f_iotype","f_inout","p0401","入/出方向"],
+ ["f_q","f_inout","p0401","汇总入库、出库数量"],
+ ["f_pdn","f_a_pur","p0302","U_InitPrice 优先 × 数量"],
+ ["f_pch","f_a_pur","p0302","发票行金额 − 数量 × 收货单价；找不到收货单时为 0"],
+ ["f_omrv","f_a_pur","p0302","WW、MRV1 重估金额（I11）"],
+ ["f_oivl_s","f_a_out","p0302","初始金额，随后被成本单价覆盖"],
+ ["f_a_pur","f_list","p0302","采购入库进入入库列表"],
+ ["f_list","f_price","p0302","(期初金额 + 入库金额) ÷ (期初数量 + 入库数量)"],
+ ["f_qc","f_price","p0302","加权平均的期初部分"],
+ ["f_qc0","f_qc","p0301","仅开账期 2024-11"],
+ ["f_qm","f_qc","p0301","上期期末 → 本期期初（跨期）"],
+ ["f_price","f_a_out","p0401","Amount = 数量 × 单价"],
+ ["f_price","f_a_sal","p0401","Amount = 数量 × 单价"],
+ ["f_qcprice","f_a_out","p0302","单价为 0 时补价"],
+ ["f_a_out","f_w1_a","p0401","O03/O07/O08/O09 按 BaseType+BaseEntry+BaseLine 归到订单行"],
+ ["f_ige_q","f_w1_a","p0401","Price = 金额 ÷ 领料数量"],
+ ["f_w1_a","f_mat","p0401","−Σ 本期领料金额"],
+ ["f_w1_a","f_sum","p0401","0402：累计领料金额（按计划用量比折算完工材料）"],
+ ["f_0106","f_sum","p0401","0402：计划用量比的分母"],
+ ["f_01061","f_sum","p0401","0402：计划用量比的分子"],
+ ["f_ign_q","f_sum","p0401","0402：完工单价的除数；为 0 时 Price 为空"],
+ ["f_fee","f_sum","p0401","0402：本期费用全部计入完工"],
+ ["f_mat","f_sumc","p0401","0402：累计材料"],
+ ["f_coilv","f_sum","p0401","决定订单在哪一层计算；6 级以上和 -1 级不算"],
+ ["f_coilv","f_price","p0401","决定自制品在哪一层重算单价"],
+ ["f_jdt","f_exp","p0311","500102、5101* 借 − 贷"],
+ ["f_btf","f_exp","p0311","JZ01/JZ03 关单差异"],
+ ["f_a_out","f_exp","p0311","其他出入库、盘点中科目为 5101* 的公摊材料"],
+ ["f_omrv","f_exp","p0311","ProWW 委外工单差异"],
+ ["f_exp","f_prc","p0312","按 工时 × 完工数 分到物料（四个费用池）"],
+ ["f_time","f_prc","p0312","分摊权重：单位工时"],
+ ["f_ign_q","f_prc","p0312","分摊权重：完工数"],
+ ["f_prc","f_w2_ex","p0312","同一物料按各订单完工数再分；负数"],
+ ["f_ign_q","f_w2_ex","p0312","订单间分配比例"],
+ ["f_pdn","f_vpd","v_pd","委外费用收货金额 − 采购退货"],
+ ["f_vpd","f_w2_ww","p0306","按订单汇总；负数"],
+ ["f_omrv","f_w2_ww","p0306","ProWW 委外差异"],
+ ["f_w2_ex","f_fee","p0401","−Σ 本期 CostCode 30/40"],
+ ["f_w2_ww","f_fee","p0401","−Σ 本期 CostCode 20"],
+ ["f_sum","f_a_fin","p0401","Amount = 入库数量 × 完工单价（IN01）"],
+ ["f_a_fin","f_list","p0401","完工入库进入入库列表，重算自制品单价"],
+ ["f_a_pur","f_inout","p0401","最终汇总"],
+ ["f_a_out","f_inout","p0401","最终汇总"],
+ ["f_a_fin","f_inout","p0401","最终汇总"],
+ ["f_a_sal","f_inout","p0401","最终汇总"],
+ ["f_inout","f_qm","p0401","期末 = 期初 + 入 − 出"],
+ ["f_qc","f_qm","p0401","期末 = 期初 + 入 − 出"],
+ ["f_qm","f_mrv2","p0501","QM_Qty=0 且 QM_Amount≠0 时，金额 = −QM_Amount"],
+ ["f_mrv2","f_a_mrv","p0501","追加进明细"],
+ ["f_a_mrv","f_inout","p0501","重算最终进销存"],
+ ["f_w1_a","f_zcp","p4001","在产品 = 累计领料 − 累计完工材料 − 关单差异"],
+ ["f_sumc","f_zcp","p4001","累计完工材料、关单差异"],
+ ["f_sum","f_zcp","p4001","当期成本列"],
+ ["f_zcp","f_zcp1","p4011","JZCY='Y' 时差额挤入金额最大的材料"],
+ ["f_w1_a","f_zcp1","p4011","累计领料金额与平均领料单价"],
+ ["f_ign_q","f_zcp1","p4011","累计完工数"],
+ ["f_wor1_pq","f_zcp1","p4011","单位计划用量"],
+ ["f_owor_pq","f_zcp1","p4011","订单计划数（完工判断）"],
+ ["f_a_out","f_je","p0801","PP01、WW01、YF01、IO01、IO02"],
+ ["f_a_fin","f_je","p0801","PP05、WW03"],
+ ["f_a_sal","f_je","p0801","DN01–DN04"],
+ ["f_exp","f_je","p0801","PP05 按 CalAcctCode 结转费用"],
+ ["f_omrv","f_je","p0801","MR01、MR02"],
+ ["f_jdt","f_je","p0801","PP04 汇总当月 5101*"],
+ ["f_ogar","f_acct","p0801","存货科目"]
+];
+// checks are parsed from checks/MTC_COST_CHECKS.sql
+const CK = /*CHECKS*/[];
+const checksForNode = id => CK.filter(c => c.nodes.includes(id));
+const checksForField = f => CK.filter(c => (f.keys || []).some(k => c.fields.includes(k)));
+
+// ---------- layout ----------
+const COLX = [16, 296, 552, 878], COLW = [214, 206, 236, 236];
+const pos = {};
+let y0 = 74;
+N.filter(n => n.col === 0 && n.grp === "b1").forEach((n,i) => pos[n.id] = {x:COLX[0], y:y0 + i*50, w:COLW[0], h:40});
+const udtY = y0 + 8*50 + 22;
+N.filter(n => n.col === 0 && n.grp === "udt").forEach((n,i) => pos[n.id] = {x:COLX[0], y:udtY + i*50, w:COLW[0], h:40});
+N.filter(n => n.col === 2).forEach((n,i) => pos[n.id] = {x:COLX[2], y:y0 + i*62, w:COLW[2], h:48});
+N.filter(n => n.col === 3).forEach((n,i) => pos[n.id] = {x:COLX[3], y:y0 + i*54, w:COLW[3], h:42});
+const viewAt = {v_fdoc:"p0201", v_doc:"p0302", v_pd:"p0306"};
+Object.keys(viewAt).forEach(v => { const p = pos[viewAt[v]]; pos[v] = {x:COLX[1], y:p.y, w:COLW[1], h:48}; });
+const W_ = 1130, H_ = Math.max(...Object.values(pos).map(p => p.y + p.h)) + 20;
+
+// ---------- svg build ----------
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("g");
+svg.setAttribute("viewBox", `0 0 ${W_} ${H_}`);
+svg.setAttribute("width", W_); svg.setAttribute("height", H_);
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const defs = el("defs", {}, svg);
+[["r","var(--read)"],["w","var(--accent)"],["m","var(--crit)"]].forEach(([k,c]) => {
+  const mk = el("marker", {id:"ar-"+k, viewBox:"0 0 10 10", refX:"9", refY:"5", markerWidth:"6", markerHeight:"6", orient:"auto-start-reverse"}, defs);
+  el("path", {d:"M0 0L10 5L0 10z", style:"fill:"+c}, mk);
+});
+const heads = [["B1 标准表 · 自定义表",COLX[0]],["视图 / 表函数",COLX[1]],["存储过程（按 0000 调用顺序）",COLX[2]],["MTC_COST_ 中间表",COLX[3]]];
+heads.forEach(([t,x]) => { const tx = el("text", {x, y:30, class:"colhead"}, svg); tx.textContent = t; });
+const g1 = el("text", {x:COLX[0], y:y0 - 8, class:"grphead"}, svg); g1.textContent = "B1 标准表";
+const g2 = el("text", {x:COLX[0], y:udtY - 8, class:"grphead"}, svg); g2.textContent = "自定义表（UDT / UDO）";
+
+const edgeLayer = el("g", {}, svg);
+const nodeLayer = el("g", {}, svg);
+const ext = id => byId[id].col === 0;
+E.forEach((e,i) => {
+  const a = pos[e.from], b = pos[e.to];
+  let x1, x2; const ya = a.y + a.h/2, yb = b.y + b.h/2;
+  if (byId[e.from].col < byId[e.to].col) { x1 = a.x + a.w; x2 = b.x; } else { x1 = a.x; x2 = b.x + b.w; }
+  const off = e.t === "r" ? -5 : 5;
+  const y1 = ya + (byId[e.from].kind === "proc" ? off : 0), y2 = yb + (byId[e.to].kind === "proc" ? off : 0);
+  const dx = (x2 - x1) * 0.5;
+  const path = el("path", {d:`M${x1} ${y1} C${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`, class:"edge "+e.t, "marker-end":`url(#ar-${e.t})`}, edgeLayer);
+  e.el = path; e.ext = ext(e.from) || ext(e.to);
+});
+N.forEach(n => {
+  const p = pos[n.id];
+  const g = el("g", {class:"node "+n.kind, tabindex:"0", role:"button", "aria-label":n.name+"，"+n.sub, "data-id":n.id}, nodeLayer);
+  el("rect", {class:"box", x:p.x, y:p.y, width:p.w, height:p.h, rx:6}, g);
+  let tx = p.x + 10;
+  if (n.kind === "proc") {
+    el("circle", {class:"stepc", cx:p.x + 16, cy:p.y + p.h/2, r:10}, g);
+    const st = el("text", {class:"stept", x:p.x + 16, y:p.y + p.h/2 + 3.6, "text-anchor":"middle"}, g); st.textContent = n.step;
+    tx = p.x + 34;
+  }
+  const nm = el("text", {class:"nm", x:tx, y:p.y + (p.h > 44 ? 20 : 17)}, g); nm.textContent = n.name;
+  const ds = el("text", {class:"ds", x:tx, y:p.y + (p.h > 44 ? 37 : 32)}, g); ds.textContent = n.sub;
+  const c = openCount(n.id);
+  if (c) {
+    el("circle", {class:"badge", cx:p.x + p.w - 2, cy:p.y + 2, r:8}, g);
+    const bt = el("text", {class:"badget", x:p.x + p.w - 2, y:p.y + 5.5, "text-anchor":"middle"}, g); bt.textContent = c;
+  }
+  n.el = g;
+  g.addEventListener("click", ev => { ev.stopPropagation(); select(n.id); });
+  g.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); select(n.id); } });
+  g.addEventListener("mouseenter", () => { state.hover = n.id; paint(); });
+  g.addEventListener("mouseleave", () => { state.hover = null; paint(); });
+});
+svg.addEventListener("click", () => select(null));
+
+// ---------- state & highlighting ----------
+const state = {sel:null, hover:null, chain:false, hideExt:false};
+function reach(id){
+  const nodes = new Set([id]), edges = new Set();
+  if (!state.chain) {
+    E.forEach(e => { if (e.from === id || e.to === id) { edges.add(e); nodes.add(e.from); nodes.add(e.to); } });
+    return {nodes, edges};
+  }
+  const walk = (dirFrom, dirTo) => {
+    const seen = new Set([id]); const q = [id];
+    while (q.length) { const cur = q.shift();
+      E.forEach(e => { if (e[dirFrom] === cur) { edges.add(e); nodes.add(e[dirTo]); if (!seen.has(e[dirTo])) { seen.add(e[dirTo]); q.push(e[dirTo]); } } });
+    }
+  };
+  walk("from","to"); walk("to","from");
+  return {nodes, edges};
+}
+function paint(){
+  const focus = state.hover || state.sel;
+  const r = focus ? reach(focus) : null;
+  E.forEach(e => {
+    const hidden = state.hideExt && e.ext;
+    e.el.classList.toggle("hide", hidden);
+    e.el.classList.toggle("on", !!r && r.edges.has(e));
+    e.el.classList.toggle("off", !!r && !r.edges.has(e));
+  });
+  N.forEach(n => {
+    n.el.classList.toggle("dim", !!r && !r.nodes.has(n.id));
+    n.el.classList.toggle("sel", state.sel === n.id);
+  });
+}
+function chipList(ids, cls){
+  return '<div class="chips">' + ids.map(id => `<button class="chip ${cls||""}" data-go="${id}">${esc(byId[id].name)}</button>`).join("") + "</div>";
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const KIND = {proc:"存储过程",mtc:"MTC 中间表",b1:"B1 标准表",udt:"自定义表",view:"视图 / 表函数"};
+const ST = {open:["待确认","open"],done:["已澄清","done"],risk:["风险提示","risk"]};
+const panel = document.getElementById("panel");
+function renderPanel(){
+  const id = state.sel;
+  if (!id) {
+    panel.innerHTML = `<span class="kind">使用说明</span><h2 style="font-family:var(--sans)">点选一个节点</h2>
+      <p class="hint">左边是数据来源，中间是按 0000 调用顺序排列的 14 个存储过程，右边是它们读写的中间表。点选任意节点，可以看到它读哪些表、写哪些表，以及相关的待确认问题。</p>
+      <p class="hint">打开“显示完整上下游”，会沿读写关系一路追到最上游和最下游。因为 0301、0302 等表在多个步骤之间来回读写，核心表的完整链路会覆盖大部分流程。</p>
+      <h3>主线</h3>
+      <ol class="steps hint"><li>层级与订单结构：1–4 步</li><li>原材料价格：5–6 步</li><li>费用：7–9 步</li><li>逐级算成本并回写价格：第 10 步</li><li>差异、在产品表、凭证：11–14 步</li></ol>
+      <h3>从这里开始</h3>${chipList(["p0401","t_dtl","t_invnt","t_owor"])}`;
+    bindChips(panel); return;
+  }
+  const n = byId[id];
+  const ins = E.filter(e => e.to === id), outs = E.filter(e => e.from === id);
+  let h = `<span class="kind">${KIND[n.kind]}${n.step ? " · 第 "+n.step+" 步" : ""}</span><h2>${esc(n.name)}</h2><p class="muted" style="margin-top:2px">${esc(n.sub)}</p><p>${esc(n.desc)}</p>`;
+  if (n.fields) h += `<h3>${n.kind === "proc" ? "规则" : "关键字段"}</h3><pre class="fields">${esc(n.fields)}</pre>`;
+  if (n.kind === "proc" || n.kind === "view") {
+    if (ins.length) h += `<h3>读取（${ins.length}）</h3>` + chipList(ins.map(e => e.from));
+    const w = outs.filter(e => e.t === "w"), m = outs.filter(e => e.t === "m");
+    if (w.length) h += `<h3>写入（${w.length}）</h3>` + chipList(w.map(e => e.to), "w");
+    if (m.length) h += `<h3>改写外部表</h3>` + chipList(m.map(e => e.to), "m");
+    if (n.kind === "view" && outs.length) h += `<h3>被谁使用</h3>` + chipList(outs.map(e => e.to));
+  } else {
+    const writers = ins.filter(e => e.t !== "r").map(e => e.from), readers = outs.filter(e => e.t === "r").map(e => e.to);
+    h += `<h3>写入方（${writers.length}）</h3>` + (writers.length ? chipList(writers, "w") : '<p class="hint">没有导出过程写入</p>');
+    h += `<h3>读取方（${readers.length}）</h3>` + (readers.length ? chipList(readers) : '<p class="hint">无</p>');
+  }
+  const iss = I.filter(x => x.nodes.includes(id));
+  if (iss.length) {
+    h += `<h3>相关问题（${iss.length}）</h3>` + iss.map(x => `<div class="iss"><span class="pill ${ST[x.st][1]}">#${x.n} ${ST[x.st][0]}</span><div style="margin-top:4px">${esc(x.t)}</div><div class="muted" style="font-size:12.5px">${esc(x.i)}</div>${x.src ? `<button class="chip w" style="margin-top:4px" data-srcgo="${esc(x.src.name)}" data-q="${esc(x.src.q)}">查看相关代码</button>` : ""}</div>`).join("");
+  }
+  const srcs = (NODE_SRC[id] || []).filter(n => SRC[n]);
+  if (srcs.length) h += `<h3>查看 SQL（${srcs.length}）</h3><div class="chips">` + srcs.map(n => `<button class="chip w" data-srcgo="${esc(n)}">${esc(n)}</button>`).join("") + "</div>";
+  else if (n.kind === "b1") h += `<h3>查看 SQL</h3><p class="hint">SAP B1 标准表，没有自定义 SQL。</p>`;
+  else if (n.kind === "udt") h += `<h3>查看 SQL</h3><p class="hint">自定义表的结构不在导出包里。</p>`;
+  const fs = FN.filter(f => f.node === id);
+  if (fs.length) h += `<h3>字段影响（${fs.length}）</h3><div class="chips">` + fs.map(f => `<button class="chip" data-f="${f.id}">${esc(f.name)}</button>`).join("") + "</div>";
+  const cks = checksForNode(id);
+  if (cks.length) h += `<h3>排查这里用的校验（${cks.length}）</h3><div class="chips">` + cks.map(c => `<button class="chip" data-ck="${c.id}" title="${esc(c.title)}">${c.id} ${esc(c.title)}</button>`).join("") + "</div>";
+  panel.innerHTML = h; bindChips(panel);
+}
+function bindChips(root){
+  root.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); goNode(b.dataset.go); }));
+  root.querySelectorAll("[data-f]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); goField(b.dataset.f); }));
+  root.querySelectorAll("[data-srcgo]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); goSource(b.dataset.srcgo, b.dataset.q || "", b.dataset.line ? +b.dataset.line : undefined); }));
+  root.querySelectorAll("[data-ck]").forEach(b => b.addEventListener("click", ev => { ev.stopPropagation(); goCheck(b.dataset.ck); }));
+}
+function select(id){ state.sel = id; paint(); renderPanel(); }
+function goNode(id){
+  showTab("graph"); select(id);
+  const p = pos[id], box = document.querySelector(".graphbox");
+  if (box && p) box.scrollTo({left: Math.max(0, p.x - 60), behavior: "smooth"});
+}
+
+// toggles
+const tChain = document.getElementById("t-chain"), tExt = document.getElementById("t-ext");
+tChain.addEventListener("click", () => { state.chain = !state.chain; tChain.setAttribute("aria-pressed", state.chain); paint(); });
+tExt.addEventListener("click", () => { state.hideExt = !state.hideExt; tExt.setAttribute("aria-pressed", state.hideExt); paint(); });
+
+// ---------- field impact ----------
+let fsel = "f_price";
+function fwalk(start, dir){
+  // dir "down": follow from→to; "up": follow to→from. Returns hops in BFS order.
+  const seen = new Set([start]), out = []; let frontier = [start], depth = 0, cyc = false;
+  while (frontier.length) {
+    depth++; const next = [];
+    frontier.forEach(cur => FE.forEach(e => {
+      const a = dir === "down" ? e[0] : e[1], b = dir === "down" ? e[1] : e[0];
+      if (a !== cur) return;
+      if (b === start) { cyc = true; return; }
+      if (seen.has(b)) return;
+      seen.add(b); next.push(b); out.push({id:b, depth, via:cur, proc:e[2], rule:e[3]});
+    }));
+    frontier = next;
+  }
+  return {out, cyc};
+}
+function renderFieldList(){
+  const q = document.getElementById("fsearch").value.trim().toLowerCase();
+  const groups = [];
+  FN.forEach(f => { if (q && !(f.name + f.note + f.grp).toLowerCase().includes(q)) return; let g = groups.find(x => x.g === f.grp); if (!g) groups.push(g = {g:f.grp, items:[]}); g.items.push(f); });
+  document.getElementById("fitems").innerHTML = groups.length ? groups.map(g => `<div class="fgrp">${esc(g.g)}</div>` + g.items.map(f => `<button class="fitem" data-fsel="${f.id}" aria-current="${f.id === fsel}">${esc(f.name)}</button>`).join("")).join("") : '<p class="hint">没有匹配的字段</p>';
+  document.querySelectorAll("[data-fsel]").forEach(b => b.addEventListener("click", () => { fsel = b.dataset.fsel; renderFieldList(); renderField(); }));
+}
+function hopHtml(h, dir){
+  const from = fById[h.via];
+  return `<div class="hop"><div class="d">第 ${h.depth} 层</div><div><button class="chip" data-f="${h.id}">${esc(fById[h.id].name)}</button>
+    <div class="via">${dir === "down" ? "由" : "流向"} ${esc(from.name)}，经 <b>${esc(byId[h.proc].name)}</b>：${esc(h.rule)}</div></div></div>`;
+}
+function renderField(){
+  const f = fById[fsel];
+  const up = fwalk(fsel, "up"), down = fwalk(fsel, "down");
+  const cks = checksForField(f);
+  let h = `<span class="kind">${esc(f.grp)}</span><h2>${esc(f.name)}</h2><p>${esc(f.note)}</p>
+    <div class="chips"><button class="chip" data-go="${f.node}">在关系图中查看 ${esc(byId[f.node].name)}</button></div>`;
+  if (cks.length) h += `<h3 style="font-size:12px;letter-spacing:.06em;color:var(--muted);margin:14px 0 6px">检查这个字段用的校验</h3><div class="chips">` + cks.map(c => `<button class="chip" data-ck="${c.id}">${c.id} ${esc(c.title)}</button>`).join("") + "</div>";
+  h += `<div class="dirs">
+    <div class="dir"><h3>上游：它从哪里来（${up.out.length}）</h3><p class="cap">这个字段不对时，按层次从近到远检查这些字段。</p>${up.out.length ? up.out.map(x => hopHtml(x, "up")).join("") : '<p class="hint">源头字段，没有上游。</p>'}${up.cyc ? '<div class="cyc">↺ 上游会绕回这个字段本身：自制品单价在 iLevel 0–5 之间逐层循环回写。</div>' : ""}</div>
+    <div class="dir"><h3>下游：它会影响什么（${down.out.length}）</h3><p class="cap">修改或修正这个字段后，这些字段的结果会跟着变。</p>${down.out.length ? down.out.map(x => hopHtml(x, "down")).join("") : '<p class="hint">终点字段，没有下游。</p>'}${down.cyc ? '<div class="cyc">↺ 下游会绕回这个字段本身：自制品单价在 iLevel 0–5 之间逐层循环回写。</div>' : ""}</div>
+  </div>`;
+  const box = document.getElementById("fdetail"); box.innerHTML = h; bindChips(box);
+}
+function goField(id){ fsel = id; document.getElementById("fsearch").value = ""; showTab("fields"); renderFieldList(); renderField(); window.scrollTo({top:0}); }
+document.getElementById("fsearch").addEventListener("input", renderFieldList);
+
+// ---------- troubleshooting ----------
+const SYM = [
+ {s:"某个物料的单价不对", c:["C08","C05","T01"], f:"f_price"},
+ {s:"库存数量和 B1 对不上", c:["C04","C03","C02","C14"], f:"f_qm"},
+ {s:"某张订单的完工成本不对", c:["C10","C12","C09","T02"], f:"f_sum"},
+ {s:"费用总额和总账对不上，或订单费用比分摊的多", c:["C11","C17"], f:"f_exp"},
+ {s:"在产品金额不对", c:["C13","C12","T02"], f:"f_zcp"},
+ {s:"凭证借贷不平或金额不对", c:["C15","C16"], f:"f_je"},
+ {s:"期末出现负数，或数量为 0 仍有金额", c:["C07","C06"], f:"f_qm"},
+ {s:"有物料完全没算成本", c:["C01","C05"], f:"f_coilv"},
+ {s:"形态转换入库（I05）单价为 0 或不对", c:["C05","T04"], f:"f_a_out"}
+];
+function renderDebug(){
+  document.getElementById("symptoms").innerHTML = "<thead><tr><th>症状</th><th>先跑这些</th><th>相关字段</th></tr></thead><tbody>" +
+    SYM.map(x => `<tr><td>${esc(x.s)}</td><td><div class="chips">${x.c.map(id => { const c = CK.find(k => k.id === id); return `<button class="chip" data-ck="${id}" title="${esc(c ? c.title : "")}">${id}</button>`; }).join("")}</div></td><td><button class="chip" data-f="${x.f}">${esc(fById[x.f].name)}</button></td></tr>`).join("") + "</tbody>";
+  bindChips(document.getElementById("symptoms"));
+  const box = document.getElementById("checks");
+  box.innerHTML = CK.length ? CK.map(c => `<details class="ck" id="ck-${c.id}"><summary><span class="ckid">${c.id}</span><span class="ckt">${esc(c.title)}</span><span class="ckstep">${esc(c.step)}</span></summary>
+    <div class="ckbody">
+      <div class="row"><span class="lab">正常结果</span><span>${esc(c.ok)}</span></div>
+      <div class="row"><span class="lab">不通过时</span><span style="white-space:pre-line">${esc(c.bad)}</span></div>
+      <div class="row"><span class="lab">关联</span><div class="chips">${c.nodes.filter(n => byId[n]).map(n => `<button class="chip" data-go="${n}">${esc(byId[n].name)}</button>`).join("")}${FN.filter(f => (f.keys || []).some(k => c.fields.includes(k))).map(f => `<button class="chip" data-f="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>
+      ${LIVE ? `<div class="runrow"><button class="runbtn" data-runck="${c.id}">运行</button><span id="rs-${c.id}"></span></div><div class="runres" id="rr-${c.id}"></div>` : ""}
+      <button class="copy" data-copy="${c.id}">复制 SQL</button>
+      <pre class="sql" id="sql-${c.id}">${esc(c.sql)}</pre>
+    </div></details>`).join("") : '<p class="hint">没有读取到校验 SQL。</p>';
+  bindChips(box);
+  box.querySelectorAll("[data-runck]").forEach(b => b.addEventListener("click", () => runCheck(b.dataset.runck)));
+  Object.keys(RUN).forEach(renderResult);
+  box.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+    const pre = document.getElementById("sql-" + b.dataset.copy);
+    const done = () => { b.textContent = "已复制"; setTimeout(() => b.textContent = "复制 SQL", 1500); };
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "已选中，按 Ctrl/⌘+C 复制"; };
+    try { navigator.clipboard.writeText(pre.textContent).then(done, fallback); } catch(e) { fallback(); }
+  }));
+}
+function goCheck(id){
+  showTab("debug");
+  const d = document.getElementById("ck-" + id); if (!d) return;
+  d.open = true; d.scrollIntoView({behavior:"smooth", block:"start"});
+  d.classList.remove("flash"); void d.offsetWidth; d.classList.add("flash");
+}
+
+// ---------- source code ----------
+// SRC is generated from the repository files: { name: {kind, origin, path, text} }
+const SRC = /*SOURCES*/{};
+const NODE_SRC = {
+ p_level:["MTC_CO_001GetItemLevel"], p0106:["MTC_COST_PROC_0106_OWORLIST"], p0201:["MTC_COST_PROC_0201_DOCDETAIL"],
+ p0321:["MTC_COST_PROC_0321_OWOR"], p0301:["MTC_COST_PROC_0301_INVNT"],
+ p0302:["MTC_COST_PROC_0302_INVNTDETAIL1","MTC_COST_PROC_0303_INVNTDETAIL2"],
+ p0311:["MTC_COST_PROC_0311_PRODUCTEXP_ADD"], p0312:["MTC_COST_PROC_0312_PRODUCTEXP_PRC"], p0306:["MTC_COST_PROC_0306_WW"],
+ p0401:["MTC_COST_PROC_0401_CAL","MTC_COST_PROC_0402_CAL_OWOR","MTC_COST_PROC_0402_CAL_OWOR_30"],
+ p0501:["MTC_COST_PROC_0501_Diff"], p4001:["MTC_PRT_CO4001"], p4011:["MTC_RPT_CO4011"],
+ p0801:["MTC_COST_PROC_0801_TOOJDT","配置数据_OTRC"],
+ v_fdoc:["MTC_COST_FC_DOCDETAIL"], v_doc:["MTC_VIEW_Document"], v_pd:["MTC_VIEW_ProductDetail"],
+ u_iotype:["配置数据_@MTC_COST_IOTYPE"],
+ t_coilv:["U_COILV"], t_0106:["MTC_COST_0106_OWORLIST","MTC_COST_0106_OWORLIST1"], t_0201:["MTC_COST_0201_DOCDETAL"],
+ t_owor:["MTC_COST_0321_OWOR"], t_owor1:["MTC_COST_0321_OWOR1"], t_qc:["MTC_COST_INVNT_QC"], t_invnt:["MTC_COST_0301_INVNT"],
+ t_dtl:["MTC_COST_0302_INVNTDETAIL1"], t_list:["MTC_COST_0303_INVNTLIST"], t_exp:["MTC_COST_0311_PRODUCTEXP_ADD"],
+ t_prc:["MTC_COST_0312_PRODUCTEXP_PRC"], t_owor2:["MTC_COST_0321_OWOR2"], t_sum:["MTC_COST_0321_OWOR_SUM","MTC_COST_0321_OWOR1_REG"],
+ t_zcp:["MTC_COST_0322_OWOR_ZCP"], t_zcp1:["MTC_COST_0322_OWOR_ZCP1"], t_jdt:["MTC_COST_0801_TOOJDT","MTC_COST_0802_OJDTBASEDETAIL","配置数据_OTRC"]
+};
+const srcNodes = name => Object.keys(NODE_SRC).filter(k => NODE_SRC[k].includes(name));
+const KW = new Set("SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON AND OR NOT IN IS NULL AS CASE WHEN THEN ELSE END GROUP BY ORDER HAVING UNION ALL INSERT INTO VALUES UPDATE SET DELETE CREATE PROCEDURE FUNCTION VIEW TABLE BEGIN DECLARE IF ELSEIF RETURN RETURNS CALL WITH DISTINCT EXISTS SUM MAX MIN COUNT AVG IFNULL COALESCE ROUND NULLIF LANGUAGE SQLSCRIPT WHILE DO OVER PARTITION ROW_NUMBER DESC ASC LIKE BETWEEN COLUMN DEFAULT OUT INT NVARCHAR DECIMAL INTEGER DATE TO_CHAR LOCAL TEMPORARY DROP READ ONLY LIMIT TOP DUMMY".split(" "));
+const SGRP = [["proc","存储过程"],["func","表函数"],["view","视图"],["table","表结构"],["data","配置数据"]];
+let ssel = "MTC_COST_PROC_0000", sterm = "";
+function hl(text){
+  const re = /(--[^\n]*)|(\/\*[\s\S]*?\*\/)|('(?:[^']|'')*')|("[^"\n]*")|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(text))) {
+    out += esc(text.slice(last, m.index));
+    if (m[1] || m[2]) out += `<span class="c">${esc(m[0])}</span>`;
+    else if (m[3]) out += `<span class="s">${esc(m[0])}</span>`;
+    else if (m[4]) out += `<span class="q">${esc(m[0])}</span>`;
+    else out += KW.has(m[5].toUpperCase()) ? `<span class="k">${esc(m[0])}</span>` : esc(m[0]);
+    last = re.lastIndex;
+  }
+  return out + esc(text.slice(last));
+}
+const countIn = (t, q) => { if (!q) return 0; const a = t.toLowerCase(), b = q.toLowerCase(); let n = 0, i = 0; while ((i = a.indexOf(b, i)) !== -1) { n++; i += b.length; } return n; };
+function renderSourceList(){
+  const q = document.getElementById("ssearch").value.trim();
+  const names = Object.keys(SRC);
+  let h = "";
+  SGRP.forEach(([k,label]) => {
+    const items = names.filter(n => SRC[n].kind === k).map(n => ({n, c: q.length >= 2 ? countIn(SRC[n].text, q) : 0, hitName: !q || n.toLowerCase().includes(q.toLowerCase())}))
+      .filter(x => !q || x.hitName || x.c > 0)
+      .sort((a,b) => (b.n === "MTC_COST_PROC_0000") - (a.n === "MTC_COST_PROC_0000") || a.n.localeCompare(b.n));
+    if (!items.length) return;
+    h += `<div class="fgrp">${label}（${items.length}）</div>` + items.map(x => `<button class="sitem" data-src="${esc(x.n)}" aria-current="${x.n === ssel}"><span>${esc(x.n)}${SRC[x.n].isNew ? '<span class="badge2 new">新</span>' : SRC[x.n].db && isChanged(SRC[x.n]) ? '<span class="badge2 chg">有变化</span>' : SRC[x.n].db ? '<span class="badge2 db">库</span>' : ""}</span>${x.c ? `<span class="cnt">${x.c} 处</span>` : ""}</button>`).join("");
+  });
+  const box = document.getElementById("sitems");
+  box.innerHTML = h || '<p class="hint">没有找到匹配的对象或文字</p>';
+  box.querySelectorAll("[data-src]").forEach(b => b.addEventListener("click", () => { const q2 = document.getElementById("ssearch").value.trim(); openSource(b.dataset.src, q2.length >= 2 && countIn(SRC[b.dataset.src].text, q2) ? q2 : ""); }));
+}
+function openSource(name, term, line){
+  if (!SRC[name]) return;
+  if (name !== ssel) sver = "cur";
+  ssel = name; sterm = term || "";
+  renderSourceList(); renderSource(line);
+}
+let sver = "cur", curText = "";
+const normText = t => (t || "").replace(/\r\n/g, "\n").split("\n").map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n").replace(/;+$/, "").trim();
+const colSig = t => Array.from((t || "").matchAll(/"([^"]+)"\s+([A-Z]+(?:\(\d+(?:,\s*\d+)?\))?)/g)).map(m => m[1] + " " + m[2].replace(/\s/g, "")).join("|");
+const isChanged = o => o.alt != null && (o.kind === "table" ? colSig(o.alt) !== colSig(o.text) : normText(o.alt) !== normText(o.text));
+function diffLines(a, b){
+  // a, b: comparison keys (whitespace collapsed). Returns ops with 1-based line numbers into a / b.
+  let s0 = 0; while (s0 < a.length && s0 < b.length && a[s0] === b[s0]) s0++;
+  let ea = a.length, eb = b.length; while (ea > s0 && eb > s0 && a[ea-1] === b[eb-1]) { ea--; eb--; }
+  const A = a.slice(s0, ea), B = b.slice(s0, eb), n = A.length, m = B.length;
+  if (n * m > 4e6) return null;
+  const dp = []; for (let i = 0; i <= n; i++) dp.push(new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const ops = [];
+  for (let k = 0; k < s0; k++) ops.push({t:"=", a:k+1, b:k+1});
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && A[i] === B[j]) { ops.push({t:"=", a:s0+i+1, b:s0+j+1}); i++; j++; }
+    else if (i < n && (j >= m || dp[i+1][j] >= dp[i][j+1])) { ops.push({t:"-", a:s0+i+1}); i++; }
+    else { ops.push({t:"+", b:s0+j+1}); j++; }
+  }
+  for (let k = 0; k < a.length - ea; k++) ops.push({t:"=", a:ea+k+1, b:eb+k+1});
+  return ops;
+}
+function diffHtml(oldText, newText){
+  const la = (oldText || "").replace(/\r\n/g, "\n").split("\n"), lb = (newText || "").replace(/\r\n/g, "\n").split("\n");
+  const key = l => l.replace(/\s+/g, " ").trim();
+  // drop blank lines from the comparison but keep their original numbering
+  const ia = [], ib = [];
+  la.forEach((l, k) => { if (key(l)) ia.push(k); }); lb.forEach((l, k) => { if (key(l)) ib.push(k); });
+  const ops = diffLines(ia.map(k => key(la[k])), ib.map(k => key(lb[k])));
+  if (!ops) return {html:'<span class="d d-gap">两个版本差异太大，请分别查看。</span>', add:0, del:0};
+  const add = ops.filter(o => o.t === "+").length, del = ops.filter(o => o.t === "-").length;
+  if (!add && !del) return {html:'<span class="d d-gap">忽略缩进、空格和空行后，两个版本内容相同。</span>', add, del};
+  const keep = new Uint8Array(ops.length);
+  ops.forEach((o, k) => { if (o.t !== "=") for (let x = Math.max(0, k-3); x <= Math.min(ops.length-1, k+3); x++) keep[x] = 1; });
+  let h = "", gap = 0;
+  const pad = v => v == null ? "     " : String(v).padStart(5, " ");
+  ops.forEach((o, k) => {
+    if (!keep[k]) { gap++; return; }
+    if (gap) { h += `<span class="d d-gap">…… 省略 ${gap} 行相同内容 ……</span>`; gap = 0; }
+    const na = o.a != null ? ia[o.a-1] + 1 : null, nb = o.b != null ? ib[o.b-1] + 1 : null;
+    const text = o.t === "-" ? la[na-1] : lb[nb-1];
+    const cls = o.t === "+" ? "d d-add" : o.t === "-" ? "d d-del" : "d";
+    h += `<span class="${cls}"><span class="ln">${pad(na)} ${pad(nb)} ${o.t === "=" ? " " : o.t} </span>${esc(text)}</span>`;
+  });
+  if (gap) h += `<span class="d d-gap">…… 省略 ${gap} 行相同内容 ……</span>`;
+  return {html:h, add, del};
+}
+function renderSource(line){
+  const o = SRC[ssel];
+  const KL = {proc:"存储过程",func:"表函数",view:"视图",table:"表结构",data:"配置数据"};
+  if (o.alt == null) sver = "cur";
+  curText = sver === "alt" ? o.alt : o.text;
+  const lines = curText.split("\n");
+  const nodes = srcNodes(ssel);
+  const altName = o.altOrigin === "对话补充" ? "对话提供的版本" : "导出包版本";
+  const vt = o.alt != null ? `<span class="vtabs" role="group" aria-label="版本"><button data-ver="cur" aria-pressed="${sver === "cur"}">数据库版本</button><button data-ver="alt" aria-pressed="${sver === "alt"}">${altName}</button><button data-ver="diff" aria-pressed="${sver === "diff"}">差异</button></span>` : "";
+  const v = document.getElementById("sview");
+  const path = sver === "alt" ? o.altPath : o.path;
+  let code, info = "";
+  if (sver === "diff") {
+    const d = diffHtml(o.alt, o.text);
+    info = isChanged(o) ? `<span class="hint">忽略缩进和空行后，相对${altName}：<span style="color:var(--good)">+${d.add}</span> / <span style="color:var(--crit)">−${d.del}</span> 行（左列为${altName}行号，右列为数据库版本行号）</span>` : `<span class="hint">内容一致</span>`;
+    code = `<div class="codebox" id="codebox" style="grid-template-columns:minmax(0,1fr)"><pre class="code diff">${d.html}</pre></div>`;
+  } else {
+    code = `<div class="codebox" id="codebox"><pre class="gutter">${lines.map((_,i) => i+1).join("\n")}</pre><pre class="code">${hl(curText)}</pre></div>`;
+  }
+  v.innerHTML = `<div class="shead"><span class="kind">${KL[o.kind]} · ${esc(sver === "alt" ? o.altOrigin : o.origin)} · ${lines.length} 行${o.db && isChanged(o) ? ' · <span style="color:var(--warn)">与' + altName + '不同</span>' : ""}</span><h2>${esc(ssel)}</h2>
+    <div class="hint mono" style="word-break:break-all">${esc(path || "")}</div>
+    <div class="sbar">${vt}${sver !== "diff" ? `<label class="hint" for="sfind">查找</label><input id="sfind" type="search" value="${esc(sterm)}" placeholder="在本文件中查找"><button class="copy" id="scopy">复制全部</button>` : info}
+      ${nodes.map(n => `<button class="chip" data-go="${n}">关系图：${esc(byId[n].name)}</button>`).join("")}</div>
+    <div class="hits" id="shits"></div></div>${code}`;
+  bindChips(v);
+  v.querySelectorAll("[data-ver]").forEach(b => b.addEventListener("click", () => { sver = b.dataset.ver; renderSource(); }));
+  if (sver === "diff") return;
+  document.getElementById("scopy").addEventListener("click", ev => {
+    const b = ev.currentTarget;
+    try { navigator.clipboard.writeText(curText).then(() => { b.textContent = "已复制"; setTimeout(() => b.textContent = "复制全部", 1500); }, () => { b.textContent = "复制失败，请手动选择"; }); } catch(e) { b.textContent = "复制失败，请手动选择"; }
+  });
+  const f = document.getElementById("sfind");
+  f.addEventListener("input", () => { sterm = f.value; markHits(); });
+  markHits(line);
+}
+function markHits(jump){
+  const lines = curText.split("\n"), box = document.getElementById("codebox");
+  if (!box) return;
+  box.querySelectorAll(".lmark").forEach(x => x.remove());
+  const q = sterm.trim().toLowerCase(), hits = [];
+  if (q) lines.forEach((l,i) => { if (l.toLowerCase().includes(q)) hits.push(i+1); });
+  const top = 10;
+  hits.slice(0, 400).forEach(n => { const d = document.createElement("div"); d.className = "lmark"; d.style.top = (top + (n-1)*18) + "px"; box.appendChild(d); });
+  const hb = document.getElementById("shits");
+  hb.innerHTML = q ? (hits.length ? `<span class="hint">${hits.length} 行匹配：</span>` + hits.slice(0, 200).map(n => `<button class="hit" data-line="${n}">L${n}</button>`).join("") : '<span class="hint">本文件中没有匹配</span>') : "";
+  hb.querySelectorAll("[data-line]").forEach(b => b.addEventListener("click", () => scrollLine(+b.dataset.line)));
+  const target = jump || hits[0];
+  if (target) scrollLine(target);
+}
+// ----- database sync -----
+let DBSYNC = {at:null, schema:"", result:null, busy:false, msg:""};
+function mergeDbSources(items){
+  items.forEach(it => {
+    const cur = SRC[it.name];
+    if (cur && cur.db) { cur.text = it.text; cur.path = it.path; return; }
+    if (cur) SRC[it.name] = {kind:it.kind, origin:"数据库", path:it.path, text:it.text, db:true, alt:cur.text, altOrigin:cur.origin, altPath:cur.path};
+    else SRC[it.name] = {kind:it.kind, origin:"数据库", path:it.path, text:it.text, db:true, isNew:true};
+  });
+}
+async function loadDbSources(){
+  try {
+    const r = await api("/api/db-sources");
+    if (r.ok && r.items.length) { mergeDbSources(r.items); DBSYNC.at = r.syncedAt; DBSYNC.schema = r.syncSchema || ""; renderSourceList(); if (SRC[ssel]) renderSource(); }
+  } catch(e) {}
+  renderSyncBar();
+}
+async function runSync(){
+  DBSYNC.busy = true; DBSYNC.msg = ""; renderSyncBar();
+  try {
+    const r = await api("/api/sync", {});
+    if (!r.ok) DBSYNC.msg = "同步失败：" + (r.error || "未知错误");
+    else { DBSYNC.result = r; DBSYNC.at = r.syncedAt; DBSYNC.schema = r.syncSchema || ""; }
+  } catch(e) { DBSYNC.msg = "无法连接本机服务，请确认启动窗口仍然开着。"; }
+  DBSYNC.busy = false;
+  await loadDbSources();
+}
+function renderSyncBar(){
+  const box = document.getElementById("ssync"); if (!box) return;
+  const dbN = Object.values(SRC).filter(o => o.db).length, chg = Object.keys(SRC).filter(k => SRC[k].db && isChanged(SRC[k])), nw = Object.keys(SRC).filter(k => SRC[k].isNew);
+  let h = "";
+  if (LIVE) h += `<div><button class="runbtn" id="syncbtn" ${DBSYNC.busy ? "disabled" : ""}>${DBSYNC.busy ? "正在从数据库同步…" : "从数据库同步脚本"}</button></div>
+    <div class="hint">读取 SCHEMA <b class="mono">${esc(LIVE.schema)}</b> 中成本相关的过程、函数、视图和表，并沿依赖关系补齐它们调用的对象；结果保存到项目的 <span class="mono">0921-数据库同步</span> 文件夹。</div>`;
+  if (DBSYNC.msg) h += `<div style="color:var(--crit)">${esc(DBSYNC.msg)}</div>`;
+  if (LIVE && DBSYNC.schema && DBSYNC.schema !== LIVE.schema) h += `<div style="color:var(--warn)">当前显示的是 SCHEMA ${esc(DBSYNC.schema)} 的同步结果，而现在连接的是 ${esc(LIVE.schema)}。需要的话请重新同步。</div>`;
+  if (dbN) h += `<div class="syncres"><div>${DBSYNC.at ? "同步于 " + esc(DBSYNC.at) + (DBSYNC.schema ? "（SCHEMA " + esc(DBSYNC.schema) + "）" : "") + "：" : ""}共 ${dbN} 个数据库对象，<b style="color:var(--warn)">${chg.length}</b> 个与原版本不同，<b style="color:var(--crit)">${nw.length}</b> 个是新补齐的。</div>
+    ${chg.length ? `<div class="chips">${chg.map(n => `<button class="chip" data-srcgo="${esc(n)}">${esc(n)}</button>`).join("")}</div>` : ""}
+    ${DBSYNC.result && DBSYNC.result.noDef.length ? `<div class="hint">无法读取定义（可能没有权限）：${DBSYNC.result.noDef.map(esc).join("、")}</div>` : ""}</div>`;
+  else if (!LIVE) h += `<div class="hint">在本机服务中打开本页后，可以从数据库同步最新的脚本。</div>`;
+  box.innerHTML = h;
+  const b = document.getElementById("syncbtn"); if (b) b.addEventListener("click", runSync);
+  bindChips(box);
+}
+function scrollLine(n){ const box = document.getElementById("codebox"); box.scrollTo({top: Math.max(0, 10 + (n-1)*18 - 80), behavior:"smooth"}); }
+function goSource(name, term, line){ showTab("source"); openSource(name, term, line); window.scrollTo({top:0}); }
+document.getElementById("ssearch").addEventListener("input", renderSourceList);
+
+// ---------- live mode: run checks through tools/cost_server.ps1 ----------
+let LIVE = null, RUN = {};
+const api = (path, body) => fetch(path, body ? {method:"POST", headers:{"Content-Type":"application/json","X-Requested-With":"cost-page"}, body:JSON.stringify(body)} : {headers:{"X-Requested-With":"cost-page"}}).then(r => r.json());
+function lsGet(k){ try { return localStorage.getItem(k) || ""; } catch(e) { return ""; } }
+function lsSet(k,v){ try { localStorage.setItem(k, v); } catch(e) {} }
+function liveParams(){ return {fc: (document.getElementById("lv-fc") || {}).value || "", item: ((document.getElementById("lv-item") || {}).value || "").trim(), wn: ((document.getElementById("lv-wn") || {}).value || "").trim()}; }
+function colIdx(res, name){ return res.columns.indexOf(name); }
+function judge(id, res){
+  const n = res.rowCount;
+  if (id === "C11") {
+    const ic = colIdx(res,"CostCode"), ia = colIdx(res,"金额"), g = {};
+    res.rows.forEach(r => { const k = r[ic]; (g[k] = g[k] || []).push(+r[ia] || 0); });
+    const bad = Object.keys(g).filter(k => Math.max(...g[k]) - Math.min(...g[k]) > 0.05);
+    return bad.length ? {st:"fail", txt:"CostCode " + bad.join("、") + " 前后不相等"} : {st:"pass", txt:"各阶段金额一致"};
+  }
+  if (id === "C15") {
+    const id1 = colIdx(res,"借贷差"), id2 = colIdx(res,"缺科目行数");
+    const bad = res.rows.filter(r => Math.abs(+r[id1] || 0) > 0.01 || (+r[id2] || 0) > 0);
+    return bad.length ? {st:"fail", txt:bad.length + " 种凭证不平或缺科目"} : {st:"pass", txt:"借贷平衡"};
+  }
+  if (id === "C18") {
+    const iq = colIdx(res,"序号"), id1 = colIdx(res,"差额");
+    const row = k => res.rows.find(r => +r[iq] === k), d = r => r ? (+r[id1] || 0) : 0;
+    const qc = d(row(1)), qm = d(row(9));
+    return Math.abs(qm) > 0.05 ? {st:"fail", txt:"140801 期末差 " + qm.toFixed(2) + "（期初差 " + qc.toFixed(2) + "），看第 2–8 行"} : {st:"pass", txt:"140801 期末与委外在产品一致"};
+  }
+  if (id === "C20") {
+    const iq = colIdx(res,"序号"), id1 = colIdx(res,"差额");
+    const bad = res.rows.filter(r => [1,2,3].includes(+r[iq]) && Math.abs(+r[id1] || 0) > 0.05);
+    return bad.length ? {st:"fail", txt:"第 " + bad.map(r => r[iq]).join("、") + " 行有差额"} : {st:"pass", txt:"140601 与发出商品一致"};
+  }
+  if (id === "C16" || id[0] === "T") return {st:"info", txt:n + " 行，需人工对照"};
+  return n === 0 ? {st:"pass", txt:"0 行"} : {st:"fail", txt:n + " 行" + (res.truncated ? "以上" : "")};
+}
+const fmtCell = v => v === null ? "" : (typeof v === "number" ? v.toLocaleString("zh-CN", {maximumFractionDigits:6}) : String(v));
+function renderResult(id){
+  const box = document.getElementById("rr-" + id), stat = document.getElementById("rs-" + id), R = RUN[id];
+  if (!box || !stat || !R) return;
+  if (R.state === "run") { stat.innerHTML = '<span class="pill run">运行中…</span>'; box.innerHTML = ""; return; }
+  if (R.state === "err") { stat.innerHTML = '<span class="pill fail">出错</span>'; box.innerHTML = `<p class="hint" style="padding:8px 10px;color:var(--crit)">${esc(R.error)}</p>`; return; }
+  const res = R.res, j = R.j, SHOW = 300;
+  stat.innerHTML = `<span class="pill ${j.st}">${{pass:"通过",fail:"不通过",info:"结果"}[j.st]}</span> <span class="hint">${esc(j.txt)} · ${(res.ms/1000).toFixed(1)} 秒 · 账期 ${esc(R.fc)}</span>`;
+  if (!res.rowCount) { box.innerHTML = '<p class="hint" style="padding:8px 10px">没有返回行。</p>'; return; }
+  box.innerHTML = `<table class="t"><thead><tr>${res.columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>` +
+    res.rows.slice(0, SHOW).map(r => `<tr>${r.map(v => `<td class="${typeof v === "number" ? "num" : ""}">${esc(fmtCell(v))}</td>`).join("")}</tr>`).join("") + "</tbody></table>" +
+    (res.rowCount > SHOW || res.truncated ? `<p class="hint" style="padding:6px 10px">共 ${res.rowCount}${res.truncated ? "+" : ""} 行，这里只显示前 ${SHOW} 行。完整结果请复制 SQL 到 HANA 客户端查询。</p>` : "");
+}
+async function runCheck(id){
+  const p = liveParams();
+  if (!/^\d{4}-\d{2}$/.test(p.fc)) { RUN[id] = {state:"err", error:"请先选择账期。"}; renderResult(id); return RUN[id]; }
+  RUN[id] = {state:"run"}; renderResult(id); renderSummary();
+  try {
+    const res = await api("/api/run", {id, fc:p.fc, item:p.item, wn:p.wn});
+    RUN[id] = res.ok ? {state:"done", res, j:judge(id, res), fc:p.fc} : {state:"err", error:res.error || "未知错误"};
+  } catch(e) { RUN[id] = {state:"err", error:"无法连接本机服务，请确认启动窗口仍然开着。"}; }
+  renderResult(id); renderSummary(); return RUN[id];
+}
+function renderSummary(){
+  const box = document.getElementById("lv-sum"); if (!box) return;
+  const ids = CK.filter(c => c.id[0] === "C").map(c => c.id).filter(id => RUN[id]);
+  if (!ids.length) { box.innerHTML = ""; return; }
+  box.innerHTML = '<div class="sumlist">' + ids.map(id => { const c = CK.find(k => k.id === id), R = RUN[id];
+    const pill = R.state === "run" ? '<span class="pill run">运行中</span>' : R.state === "err" ? '<span class="pill fail">出错</span>' : `<span class="pill ${R.j.st}">${{pass:"通过",fail:"不通过",info:"结果"}[R.j.st]}</span>`;
+    const t = R.state === "done" ? R.j.txt : R.state === "err" ? R.error : "";
+    return `<button data-ck="${id}"><span class="ckid">${id}</span>${pill}<span>${esc(c.title)}</span><span class="hint">${esc(t)}</span></button>`; }).join("") + "</div>";
+  bindChips(box);
+}
+async function runAll(btn){
+  btn.disabled = true;
+  const ids = CK.filter(c => c.id[0] === "C").map(c => c.id);
+  ids.forEach(id => delete RUN[id]);
+  for (let i = 0; i < ids.length; i++) { btn.textContent = `运行中 ${i+1}/${ids.length}…`; await runCheck(ids[i]); }
+  btn.disabled = false; btn.textContent = "按顺序运行 C01–C20";
+  const first = ids.find(id => RUN[id] && (RUN[id].state === "err" || RUN[id].j.st === "fail"));
+  document.getElementById("lv-note").textContent = first ? `第一个没通过的是 ${first}：从它开始查，修好后再重跑一遍。` : "全部校验通过。";
+}
+function renderLiveBar(){
+  const bar = document.getElementById("livebar"); if (!bar) return;
+  if (!LIVE) {
+    bar.innerHTML = `<div class="row"><span class="dot"></span><span class="hint">当前为查看模式，只能复制 SQL。要在页面里直接运行：在装有 HANA Client 的 Windows 电脑上，双击项目里的 <span class="mono">tools\\启动成本核算排查.bat</span>，它会连上数据库并自动打开本页。</span></div>`;
+    return;
+  }
+  const fcs = LIVE.periods || [], saved = lsGet("fh100-fc");
+  bar.innerHTML = `<div class="row"><span><span class="dot on"></span>已连接 <span class="mono">${esc(LIVE.conn || "HANA")}</span> · 账号 <span class="mono">${esc(LIVE.user)}</span> · SCHEMA <b class="mono">${esc(LIVE.schema)}</b> · 下面的校验都在这个 SCHEMA 中运行</span></div>
+    <div class="row"><label for="lv-fc">账期</label><select id="lv-fc">${fcs.map(r => `<option value="${esc(r[0])}" ${r[0] === saved ? "selected" : ""}>${esc(r[0])}${r[1] === "Y" ? "（已锁定）" : ""}</option>`).join("")}</select>
+      <label for="lv-item">物料编码</label><input id="lv-item" placeholder="T01 需要" value="${esc(lsGet("fh100-item"))}">
+      <label for="lv-wn">订单号</label><input id="lv-wn" placeholder="T02 需要" value="${esc(lsGet("fh100-wn"))}">
+      <button class="runbtn" id="lv-all">按顺序运行 C01–C20</button></div>
+    <div class="hint" id="lv-note"></div><div id="lv-sum"></div>`;
+  ["lv-fc","lv-item","lv-wn"].forEach(k => document.getElementById(k).addEventListener("change", e => lsSet("fh100-" + k.slice(3), e.target.value)));
+  document.getElementById("lv-all").addEventListener("click", e => runAll(e.currentTarget));
+  renderSummary();
+}
+function renderConnPill(){
+  const el = document.getElementById("connpill"); if (!el) return;
+  if (!LIVE) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<span><span class="dot on"></span>已连接 HANA</span><span class="sep">·</span><span>连接 <b>${esc(LIVE.conn || "—")}</b></span><span class="sep">·</span><span>账号 <b>${esc(LIVE.user)}</b></span><span class="sep">·</span><span>SCHEMA <b>${esc(LIVE.schema)}</b></span><span class="hint">所有查询只读执行，结果均来自这个 SCHEMA</span>`;
+  document.title = `[${LIVE.schema}] FH100 成本核算关系图`;
+}
+async function detectLive(){
+  if (!/^https?:$/.test(location.protocol) || !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+  try {
+    const ping = await api("/api/ping");
+    if (!ping.ok) { LIVE = null; renderLiveBar(); return; }
+    const per = await api("/api/periods");
+    LIVE = {user: ping.rows[0][0], schema: ping.schema || ping.rows[0][1], conn: ping.conn || "", periods: per.ok ? per.rows : []};
+    renderConnPill(); renderDebug(); renderLiveBar(); loadDbSources();
+  } catch(e) {}
+}
+
+// ---------- version ----------
+const CHANGELOG = /*CHANGELOG*/[];
+const BUILT = /*BUILT*/"";
+function renderVersions(){
+  const cur = CHANGELOG[0] || {version:"?", date:""};
+  const b = document.getElementById("verbtn");
+  b.textContent = `v${cur.version} · ${cur.date}`;
+  b.addEventListener("click", () => showTab("versions"));
+  document.getElementById("vintro").innerHTML = `当前版本 <b class="mono">v${esc(cur.version)}</b>，发布日期 ${esc(cur.date)}，本文件生成于 <span class="mono">${esc(BUILT)}</span>。页面内容来自项目文件夹，修改后运行 <span class="mono">python tools/page_build/build.py</span> 重新生成，并在 <span class="mono">tools/page_build/changelog.json</span> 最前面加一条记录。`;
+  document.getElementById("vlog").innerHTML = CHANGELOG.map((v, i) => `<div class="vitem"><div><div class="vv">v${esc(v.version)}${i === 0 ? '<span class="vcur">当前</span>' : ""}</div><div class="vd">${esc(v.date)}</div></div><ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>`).join("");
+}
+
+// ---------- tabs ----------
+const tabs = ["graph","fields","debug","source","lineage","issues","versions"];
+function showTab(t){
+  tabs.forEach(x => {
+    document.getElementById("view-"+x).hidden = x !== t;
+    document.getElementById("tab-"+x).setAttribute("aria-selected", x === t);
+  });
+  try { localStorage.setItem("fh100-tab", t); } catch(e) {}
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+// ---------- lineage table ----------
+document.getElementById("lineage").innerHTML = "<thead><tr><th>#</th><th>目标字段</th><th>来源</th><th>规则</th><th>过程</th></tr></thead><tbody>" +
+  L.map((r,i) => `<tr><td class="n">${i+1}</td><td><code>${esc(r.f)}</code>${r.loop ? `<div class="loopnote">↺ ${esc(r.loop)}</div>` : ""}</td><td>${esc(r.s)}</td><td>${esc(r.r)}</td><td><button class="chip" data-go="${r.p}">${esc(byId[r.p].name)}</button></td></tr>`).join("") + "</tbody>";
+bindChips(document.getElementById("lineage"));
+
+// ---------- issues table ----------
+let ifil = "all";
+function renderIssues(){
+  const rows = I.filter(x => ifil === "all" || x.st === ifil);
+  document.getElementById("issues").innerHTML = "<thead><tr><th>#</th><th>状态</th><th>问题</th><th>影响 / 结论</th><th>相关对象</th></tr></thead><tbody>" +
+    rows.map(x => `<tr><td class="n">${x.n}</td><td><span class="pill ${ST[x.st][1]}">${ST[x.st][0]}</span></td><td>${esc(x.t)}</td><td class="muted">${esc(x.i)}${x.src ? `<div style="margin-top:4px"><button class="chip w" data-srcgo="${esc(x.src.name)}" data-q="${esc(x.src.q)}">查看相关代码</button></div>` : ""}</td><td><div class="chips">${x.nodes.map(id => `<button class="chip" data-go="${id}">${esc(byId[id].name)}</button>`).join("") || '<span class="muted">—</span>'}</div></td></tr>`).join("") + "</tbody>";
+  bindChips(document.getElementById("issues"));
+}
+const cnt = s => I.filter(x => x.st === s).length;
+const F = [["all","全部 "+I.length],["open","待确认 "+cnt("open")],["risk","风险提示 "+cnt("risk")],["done","已澄清 "+cnt("done")]];
+const fbox = document.getElementById("ifilters");
+fbox.innerHTML = F.map(([k,l]) => `<button class="fbtn" data-f="${k}" aria-pressed="${k==="all"}">${l}</button>`).join("");
+fbox.querySelectorAll(".fbtn").forEach(b => b.addEventListener("click", () => {
+  ifil = b.dataset.f; fbox.querySelectorAll(".fbtn").forEach(x => x.setAttribute("aria-pressed", x === b)); renderIssues();
+}));
+renderIssues();
+
+// ---------- stats ----------
+document.getElementById("stats").innerHTML =
+  `<span><b>14</b> 步</span><span><b>${N.filter(n=>n.kind==="mtc").length}</b> 组中间表</span><span><b>${N.filter(n=>n.kind==="view").length}</b> 个视图/函数</span><span><b>${E.length}</b> 条读写关系</span><span><b>${FN.length}</b> 个字段 · <b>${FE.length}</b> 条字段依赖</span><span><b>${CK.length}</b> 个校验/追溯查询</span><span><b>${I.length - cnt("done")}</b> 个待处理问题</span>`;
+
+// ---------- init ----------
+paint(); renderPanel(); renderFieldList(); renderField(); renderDebug(); renderSourceList(); renderSource(); renderVersions(); renderLiveBar(); renderSyncBar(); detectLive();
+let start = "graph";
+const h = (location.hash || "").slice(1);
+if (tabs.includes(h)) start = h; else { try { const s = localStorage.getItem("fh100-tab"); if (tabs.includes(s)) start = s; } catch(e) {} }
+showTab(start);
+})();
+</script>

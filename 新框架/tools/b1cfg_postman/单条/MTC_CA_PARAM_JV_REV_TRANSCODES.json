@@ -1,0 +1,8 @@
+{
+  "Code": "JV_REV_TRANSCODES",
+  "Name": "凭单下月初自动冲销的凭证代码",
+  "U_Category": "凭证与对账",
+  "U_Value": "AR03,AR04",
+  "U_DataType": "列表",
+  "U_Hint": "凭证代码逗号分隔，如 AR03,AR04"
+}

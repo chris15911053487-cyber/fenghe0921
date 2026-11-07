@@ -1,0 +1,8 @@
+{
+  "Code": "TAIL_WARN",
+  "Name": "尾差报警下限",
+  "U_Category": "尾差与校验",
+  "U_Value": "0.1",
+  "U_DataType": "数字",
+  "U_Hint": "元（含）：POST-14 挤进出库行的尾差绝对值达到本值才报，如 0.1"
+}

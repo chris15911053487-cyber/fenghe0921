@@ -1,0 +1,45 @@
+[
+  {
+    "Code": "MFG",
+    "Name": "制造车间",
+    "U_IsDefault": "Y",
+    "U_IsCloseDif": "Y",
+    "U_Descr": "旧 0312：成本中心不是 P017 的费用；关单差异也进这个池（Q10）",
+    "MTC_CA_POOL1Collection": [],
+    "MTC_CA_POOL2Collection": [
+      {
+        "U_MatchBy": "GRPTYPE",
+        "U_MatchVal": "B",
+        "U_WorTypes": "10,20,30,40",
+        "U_Descr": "车间类别 B（旧 0312 物料组 102）"
+      },
+      {
+        "U_MatchBy": "GRPTYPE",
+        "U_MatchVal": "C",
+        "U_WorTypes": "10,20,30,40",
+        "U_Descr": "车间类别 C（旧 0312 物料组 103）"
+      }
+    ]
+  },
+  {
+    "Code": "PKG",
+    "Name": "包装车间",
+    "U_IsDefault": "N",
+    "U_IsCloseDif": "N",
+    "U_Descr": "旧 0312：成本中心 P017 的费用",
+    "MTC_CA_POOL1Collection": [
+      {
+        "U_OcrCode": "P017",
+        "U_Descr": "OPRC.U_CalType = P017 的成本中心都进包装车间（也可以直接填成本中心代码）"
+      }
+    ],
+    "MTC_CA_POOL2Collection": [
+      {
+        "U_MatchBy": "GRPTYPE",
+        "U_MatchVal": "A",
+        "U_WorTypes": "10,20,30,40",
+        "U_Descr": "车间类别 A 包装（旧 0312 物料组 101）"
+      }
+    ]
+  }
+]

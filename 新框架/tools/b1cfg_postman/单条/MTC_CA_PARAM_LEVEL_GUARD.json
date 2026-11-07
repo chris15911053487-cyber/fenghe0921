@@ -1,0 +1,8 @@
+{
+  "Code": "LEVEL_GUARD",
+  "Name": "层级计算保护上限",
+  "U_Category": "计算控制",
+  "U_Value": "30",
+  "U_DataType": "整数",
+  "U_Hint": "整数，防循环引用，不是业务层数，如 30"
+}

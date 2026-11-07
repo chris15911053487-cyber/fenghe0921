@@ -1,0 +1,20 @@
+CREATE COLUMN TABLE "FH100"."MTC_COST_ROLLUP_DETAIL" (
+    "FcCode" NVARCHAR(50),
+    "ParentItem" NVARCHAR(50),
+    "ParentLevel" INTEGER,
+    "ChildItem" NVARCHAR(50),
+    "ChildLevel" INTEGER,
+    "ChildAmount" DECIMAL(19,6),
+    "ChildUnitCost" DECIMAL(19,6),
+    "ChildUnitMaterial" DECIMAL(19,6),
+    "ChildUnitManExp" DECIMAL(19,6),
+    "ChildUnitLabAmt" DECIMAL(19,6),
+    "ChildUnitWWExp" DECIMAL(19,6),
+    "SplitMaterial" DECIMAL(19,6),
+    "SplitManExp" DECIMAL(19,6),
+    "SplitLabAmount" DECIMAL(19,6),
+    "SplitWWExp" DECIMAL(19,6),
+    "SplitTotal" DECIMAL(19,6),
+    "MaterialPct" DECIMAL(10,4),
+    "CalcDate" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)

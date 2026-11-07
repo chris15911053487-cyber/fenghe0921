@@ -1,0 +1,8 @@
+{
+  "Code": "START_FC",
+  "Name": "新框架起始账期",
+  "U_Category": "计算控制",
+  "U_Value": "2026-09",
+  "U_DataType": "账期",
+  "U_Hint": "YYYY-MM。上线后不要改，会打乱期初承接"
+}

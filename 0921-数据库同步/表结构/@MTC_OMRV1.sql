@@ -1,0 +1,23 @@
+CREATE COLUMN TABLE "FH100"."@MTC_OMRV1" (
+    "DocEntry" INTEGER NOT NULL,
+    "LineId" INTEGER NOT NULL,
+    "VisOrder" INTEGER,
+    "Object" NVARCHAR(20),
+    "LogInst" INTEGER,
+    "U_CalType" NVARCHAR(30),
+    "U_ItemCode" NVARCHAR(50),
+    "U_ItemName" NVARCHAR(200),
+    "U_Quantity" DECIMAL(21,6),
+    "U_Price" DECIMAL(21,6),
+    "U_Amount" DECIMAL(21,6),
+    "U_BaseType" NVARCHAR(30),
+    "U_BaseEntry" INTEGER,
+    "U_BaseNum" INTEGER,
+    "U_BaseLine" INTEGER,
+    "U_LineMemo" NVARCHAR(254),
+    "U_StockCode" NVARCHAR(15),
+    "U_StockName" NVARCHAR(100),
+    "U_AcctCode" NVARCHAR(15),
+    "U_AcctName" NVARCHAR(100),
+    PRIMARY KEY ("DocEntry", "LineId")
+)

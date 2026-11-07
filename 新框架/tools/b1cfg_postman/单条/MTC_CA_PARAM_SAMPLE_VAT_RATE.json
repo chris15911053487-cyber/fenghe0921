@@ -1,0 +1,8 @@
+{
+  "Code": "SAMPLE_VAT_RATE",
+  "Name": "样品视同销售税率",
+  "U_Category": "凭证与对账",
+  "U_Value": "0.13",
+  "U_DataType": "数字",
+  "U_Hint": "小数，如 0.13"
+}

@@ -1,0 +1,8 @@
+{
+  "Code": "RECON_BLOCK_ON",
+  "Name": "财务对账按哪列差额阻断",
+  "U_Category": "凭证与对账",
+  "U_Value": "CUR",
+  "U_DataType": "文字",
+  "U_Hint": "CUR 本期差额（期初差额只列示）/ END 期末差额"
+}

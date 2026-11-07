@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成本执行台</title>
+<script>
+// 界面风格：在渲染前设置 <html data-ui-theme>，避免闪烁。取值同 Online-report；system = 跟随系统（深色用 dark，浅色用默认 warm）
+(function(){
+  var ids = ["warm","ent","tech","ind","mono","dark"], old = {fiori:"ent", paper:"mono", classic:"warm"}, p = null;
+  try { p = localStorage.getItem("cc.theme"); if (old[p]) { p = old[p]; localStorage.setItem("cc.theme", p); } } catch (e) {}
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-ui-theme", p === "system" ? (dark ? "dark" : "warm") : ids.indexOf(p) >= 0 ? p : "warm");
+})();
+</script>
+<link rel="stylesheet" href="css/themes.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <button class="btn navbtn" id="navBtn" aria-label="菜单">☰ 菜单</button>
+  <h1>成本执行台</h1>
+  <div class="runsw" id="runSw">
+    <button class="runbtn" id="runBtn" aria-haspopup="true"><span id="runBtnTxt">选择一次运行</span> <span class="caret">▾</span></button>
+    <div class="pop" id="runPop" hidden>
+      <div class="bar"><b>运行记录</b><span class="sp"></span><button class="btn" id="btnRefresh">刷新</button></div>
+      <div class="runs" id="runs"></div>
+    </div>
+  </div>
+  <span class="rmeta" id="runMeta"></span>
+  <a href="#steps" class="jobpill" id="jobPill" hidden></a>
+  <span class="sp"></span>
+  <div class="conn" id="conn">连接中…</div>
+  <select id="themeSel" title="界面风格（与 Online-report 同一套主题，记在本机）"><option value="warm">D 暖色人文风</option><option value="ent">B 稳重企业风</option><option value="tech">A 科技风</option><option value="ind">C 深色工业风</option><option value="mono">E 极简黑白风</option><option value="dark">F 全深色</option><option value="system">跟随系统</option></select>
+  <button class="btn" id="linkBtn" title="复制当前页面的链接（含运行号、打开的物料 / 订单），发给别人可以直接打开">🔗 链接</button>
+  <select id="clickSel" title="表格点行的方式（记在本机）：双击打开时单击只选中，抽屉开着时单击别的行直接切换，↑ ↓ 换行、Enter 打开"><option value="dbl">双击开明细</option><option value="one">单击开明细</option></select>
+  <button class="btn" id="denBtn" title="切换表格行距">标准行距</button>
+  <button class="btn primary" id="goRun">发起计算</button>
+</header>
+
+<div class="layout">
+  <nav class="side" id="tabs">
+    <div class="navtool"><button class="navcol" id="navCol">« 收起菜单</button><button id="navFold" title="折叠 / 展开全部分组">⇕ 分组</button></div>
+    <div class="grp">本次运行</div>
+    <button data-t="steps">步骤</button>
+    <button data-t="flow">计算过程</button>
+    <button data-t="checks">校验</button>
+    <button data-t="qcp">期初价维护</button>
+    <div class="grp">存货</div>
+    <button data-t="items">物料单价</button>
+    <button data-t="inv">收发存汇总</button>
+    <button data-t="ledger">收发存明细</button>
+    <button data-t="trace">成本追溯</button>
+    <div class="grp">订单与费用</div>
+    <button data-t="orders">订单成本</button>
+    <button data-t="wip">在产品</button>
+    <button data-t="exp">费用归集</button>
+    <button data-t="pool">费用分摊</button>
+    <button data-t="hours">工时分摊</button>
+    <div class="grp">财务</div>
+    <button data-t="goods">发出商品</button>
+    <button data-t="ap">应付暂估</button>
+    <button data-t="jdt">凭证</button>
+    <button data-t="recon">财务对账</button>
+    <button data-t="tb">科目余额表</button>
+    <div class="grp">比对与说明</div>
+    <button data-t="cmp">新旧比对</button>
+    <button data-t="kpi">运行比较</button>
+    <button data-t="report">计算说明</button>
+    <div class="grp">操作</div>
+    <button data-t="run">发起计算</button>
+    <button data-t="jv">生成凭单</button>
+    <button data-t="scen">模拟场景</button>
+    <button data-t="boot">期初承接</button>
+    <div class="grp">配置与帮助</div>
+    <button data-t="b1cfg">B1 维护数据</button>
+    <button data-t="manual">说明书</button>
+    <button data-t="ai">AI 助手</button>
+  </nav>
+
+  <main>
+
+    <section class="card page" id="page-run" hidden>
+      <h2>发起计算</h2>
+      <div class="form">
+        <div class="row"><label>账期</label><select id="fc"></select><span id="fcStat"></span></div>
+        <div class="row"><label>类型</label>
+          <span class="seg" id="rtSeg"><button data-v="F" class="on">正式</button><button data-v="S">模拟</button></span>
+        </div>
+        <div class="row" id="scenRow" hidden><label>场景</label><select id="scen"></select></div>
+        <div class="row"><label>操作人</label><input type="text" id="user" maxlength="50"></div>
+        <div class="row"><label></label><button class="btn primary" id="btnRun">开始计算</button><button class="btn" id="btnPre">只做计算前检查</button></div>
+      </div>
+      <p class="hint">依次执行：从 B1 同步费用池与归集参数 → 快照 → 计算前检查（有阻断项就停止）→ 迭代计算 → 定稿 → 计算后校验 → 新旧比对 → 发出商品 / 应付暂估 / 凭证 → 收尾。只写 MTC_CA_* 表，不改 B1 单据，不过账。</p>
+      <div id="fcGate"></div>
+      <div id="job"></div>
+    </section>
+
+    <section class="card page" id="page-scen" hidden>
+      <div class="bar"><h2 style="margin:0">模拟场景</h2><span class="sp"></span><button class="btn" id="scNew">新建</button></div>
+      <div class="row"><select id="scSel" style="flex:1;max-width:420px"></select><button class="btn" id="scEdit">编辑</button></div>
+      <p class="hint">模拟计算（在“发起计算”里类型选“模拟”）在快照之后按场景假设调整：采购价、费用池、单位工时的百分比；结果单独保存，不影响正式结果。</p>
+      <div id="scBox"></div>
+    </section>
+
+    <section class="card page" id="page-boot" hidden>
+      <h2>期初承接</h2>
+      <div id="bootInfo" class="hint" style="margin:0 0 10px"></div>
+      <div class="row"><button class="btn" id="btnBoot">执行期初承接</button></div>
+      <p class="hint">从旧框架承接账期的结果取物料期初和订单在产品（只在新框架第一次计算前做一次；重做会覆盖该账期的承接数据）。</p>
+    </section>
+
+    <section class="card" id="runCard">
+      <h2 id="pageTitle"></h2>
+      <div id="pane"></div>
+    </section>
+  </main>
+</div>
+
+<aside id="drawer" hidden>
+  <div id="drGrip" title="拖动调整宽度"></div>
+  <div class="dh"><button class="btn" id="drBack" hidden>← 返回</button><div class="crumb" id="drCrumb"></div><button class="btn" id="drDock" hidden title="回到右侧（也可双击标题栏）">停靠</button><button class="btn" id="drLink" hidden title="复制这个物料 / 订单明细的链接，发给别人可以直接打开">🔗 链接</button><button class="btn" id="drWide">全屏</button><button class="btn" id="drClose" title="关闭（Esc）">✕</button></div>
+  <div id="drBody"></div>
+</aside>
+
+<dialog id="dlg">
+  <h3 id="dlgTitle"></h3>
+  <table id="dlgTable"></table>
+  <div id="dlgTypeWrap">
+    <p class="hint" style="margin:0 0 6px">请完整输入账套名 <b class="mono" id="dlgSchema"></b> 确认：</p>
+    <input type="text" id="dlgInput" autocomplete="off">
+  </div>
+  <div id="dlgReasonWrap" hidden>
+    <p class="hint" style="margin:10px 0 6px">确认理由（必填，至少 4 个字，会记录确认人和时间）：</p>
+    <textarea id="dlgReason" rows="3" maxlength="500" style="width:100%;box-sizing:border-box"></textarea>
+  </div>
+  <div id="dlgPwdWrap" hidden>
+    <p class="hint" style="margin:10px 0 6px">输入你的 B1 密码（用你的账号 <b id="dlgPwdUser"></b> 在 B1 建凭单，不保存）：</p>
+    <input type="password" id="dlgPwd" autocomplete="off">
+  </div>
+  <div class="row" style="justify-content:flex-end;margin:14px 0 0">
+    <button class="btn" id="dlgCancel">取消</button>
+    <button class="btn primary" id="dlgOk" disabled>确认执行</button>
+  </div>
+</dialog>
+
+<!-- 脚本按顺序加载，共用全局作用域；说明见各文件头 -->
+<script src="js/core.js"></script>
+<script src="js/table.js"></script>
+<script src="js/drawer.js"></script>
+<script src="js/xlsx.js"></script>
+<script src="js/shell.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/flow.js"></script>
+<script src="js/inventory.js"></script>
+<script src="js/trace.js"></script>
+<script src="js/run.js"></script>
+<script src="js/report.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/scen.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

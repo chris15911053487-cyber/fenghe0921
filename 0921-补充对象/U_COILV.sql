@@ -1,0 +1,9 @@
+CREATE COLUMN TABLE "FH100"."U_COILV" ("FcCode" NVARCHAR(10),
+     "ItemCode" NVARCHAR(20),
+     "ItemName" NVARCHAR(100),
+     "ItmsGrpCod" NVARCHAR(20),
+     "ItmsGrpNam" NVARCHAR(100),
+     "iLevel" INTEGER CS_INT,
+     "CreatedDate" LONGDATE CS_LONGDATE,
+     "CreatedTime" TIME CS_SECONDTIME,
+     "CalType" NVARCHAR(30)) UNLOAD PRIORITY 5 AUTO MERGE

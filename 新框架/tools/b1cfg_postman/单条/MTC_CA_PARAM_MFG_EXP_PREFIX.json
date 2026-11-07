@@ -1,0 +1,8 @@
+{
+  "Code": "MFG_EXP_PREFIX",
+  "Name": "制造费用科目前缀",
+  "U_Category": "费用归集",
+  "U_Value": "5101",
+  "U_DataType": "文字",
+  "U_Hint": "凭证里以它开头的科目计入制造费用，如 5101"
+}

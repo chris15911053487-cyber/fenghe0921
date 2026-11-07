@@ -1,0 +1,22 @@
+CREATE COLUMN TABLE "FH100"."MTC_COST_0321_OWOR1" (
+    "BPLId" INTEGER,
+    "FcCode" NVARCHAR(50),
+    "WorType" NVARCHAR(50),
+    "WorEntry" NVARCHAR(50),
+    "WorNum" NVARCHAR(50),
+    "LineNum" INTEGER,
+    "ItemCode" NVARCHAR(50),
+    "ItemName" NVARCHAR(254),
+    "ItmsGrpCod" NVARCHAR(50),
+    "Quantity" DECIMAL(19,6),
+    "StdPrice" DECIMAL(19,6),
+    "StdAmount" DECIMAL(19,6),
+    "IgeQty" DECIMAL(19,6),
+    "Price" DECIMAL(19,6),
+    "Amount" DECIMAL(19,6),
+    "CreateDate" NVARCHAR(50),
+    "Creator" NVARCHAR(50),
+    "PriceMemo" NVARCHAR(4000),
+    "IsUpdatePrice" NVARCHAR(10),
+    "DocType" NVARCHAR(30)
+)

@@ -1,0 +1,547 @@
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_1
+
+--changeset_1
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 1
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "MFG_EXP_PREFIX", "Name": "制造费用科目前缀", "U_Category": "费用归集", "U_Value": "5101", "U_DataType": "文字", "U_Hint": "凭证里以它开头的科目计入制造费用，如 5101"}
+
+--changeset_1--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_2
+
+--changeset_2
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 2
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "LAB_EXP", "Name": "人工费用科目", "U_Category": "费用归集", "U_Value": "500102", "U_DataType": "文字", "U_Hint": "科目代码，如 500102"}
+
+--changeset_2--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_3
+
+--changeset_3
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 3
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "EXP_JDT_TRANSCODES", "Name": "计入费用池的凭证代码", "U_Category": "费用归集", "U_Value": "空,PP03,MR03,MR11,MR12", "U_DataType": "列表", "U_Hint": "OJDT.TransCode，逗号分隔；“空”= 没有凭证代码的手工凭证。如 空,PP03,MR03,MR11,MR12"}
+
+--changeset_3--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_4
+
+--changeset_4
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 4
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "SUBFEE_ITEM", "Name": "委外加工费物料", "U_Category": "费用归集", "U_Value": "X0510001", "U_DataType": "文字", "U_Hint": "物料代码，如 X0510001"}
+
+--changeset_4--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_5
+
+--changeset_5
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 5
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "START_FC", "Name": "新框架起始账期", "U_Category": "计算控制", "U_Value": "2026-09", "U_DataType": "账期", "U_Hint": "YYYY-MM。上线后不要改，会打乱期初承接"}
+
+--changeset_5--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_6
+
+--changeset_6
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 6
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "BOOTSTRAP_FC", "Name": "期初承接账期", "U_Category": "计算控制", "U_Value": "2026-08", "U_DataType": "账期", "U_Hint": "YYYY-MM，从旧框架该期结果取期初。上线后不要改"}
+
+--changeset_6--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_7
+
+--changeset_7
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 7
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CONV_PRICE", "Name": "收敛标准：单价", "U_Category": "计算控制", "U_Value": "0.000001", "U_DataType": "数字", "U_Hint": "物料单价两轮之差的上限，如 0.000001；不清楚不要改"}
+
+--changeset_7--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_8
+
+--changeset_8
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 8
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CONV_AMT", "Name": "收敛标准：金额", "U_Category": "计算控制", "U_Value": "0.01", "U_DataType": "数字", "U_Hint": "费用池、关单差异两轮之差的上限（元），如 0.01；不清楚不要改"}
+
+--changeset_8--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_9
+
+--changeset_9
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 9
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "MAX_ITER", "Name": "最大迭代轮数", "U_Category": "计算控制", "U_Value": "50", "U_DataType": "整数", "U_Hint": "整数，超过仍不收敛则不写结果，如 50"}
+
+--changeset_9--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_10
+
+--changeset_10
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 10
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "LEVEL_GUARD", "Name": "层级计算保护上限", "U_Category": "计算控制", "U_Value": "30", "U_DataType": "整数", "U_Hint": "整数，防循环引用，不是业务层数，如 30"}
+
+--changeset_10--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_11
+
+--changeset_11
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 11
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "QCP_PRICED_IN", "Name": "PRE-23 价格来源入库类型", "U_Category": "计算控制", "U_Value": "I01,I03,I05,I07,I08,I09,I90", "U_DataType": "列表", "U_Hint": "交易类型逗号分隔，如 I01,I03,I05,I07,I08,I09,I90"}
+
+--changeset_11--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_12
+
+--changeset_12
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 12
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "LEGACY_INITPRICE_DATE", "Name": "按 U_InitPrice 取成本的截止日", "U_Category": "计算控制", "U_Value": "2024-12-31", "U_DataType": "日期", "U_Hint": "YYYY-MM-DD，该日及以前的交货 / 退货按行上 U_InitPrice 取成本"}
+
+--changeset_12--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_13
+
+--changeset_13
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 13
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "TAIL_MAX", "Name": "零库存尾差结转上限", "U_Category": "尾差与校验", "U_Value": "0.02", "U_DataType": "数字", "U_Hint": "元（含）：期末数量 0、金额在 ± 本值以内的结转 640101（JZ04），如 0.02"}
+
+--changeset_13--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_14
+
+--changeset_14
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 14
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "TAIL_WARN", "Name": "尾差报警下限", "U_Category": "尾差与校验", "U_Value": "0.1", "U_DataType": "数字", "U_Hint": "元（含）：POST-14 挤进出库行的尾差绝对值达到本值才报，如 0.1"}
+
+--changeset_14--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_15
+
+--changeset_15
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 15
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "PRICE_JUMP_PCT", "Name": "价格波动报警比例", "U_Category": "尾差与校验", "U_Value": "30", "U_DataType": "数字", "U_Hint": "%：POST-14 价格波动 / 期末单价偏离，如 30"}
+
+--changeset_15--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_16
+
+--changeset_16
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 16
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "PRICE_JUMP_AMT", "Name": "价格波动报警金额", "U_Category": "尾差与校验", "U_Value": "100", "U_DataType": "数字", "U_Hint": "元：POST-14 价格波动的影响金额下限，如 100"}
+
+--changeset_16--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_17
+
+--changeset_17
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 17
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CHECK_DTL_MAX", "Name": "每项校验保留明细行数", "U_Category": "尾差与校验", "U_Value": "200", "U_DataType": "整数", "U_Hint": "整数，如 200"}
+
+--changeset_17--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_18
+
+--changeset_18
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 18
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "ACCT_CHECK_BUSITYPES", "Name": "PRE-25 核对科目的业务类型", "U_Category": "尾差与校验", "U_Value": "210", "U_DataType": "列表", "U_Hint": "@U_CIOTRN.Code 逗号分隔，如 210"}
+
+--changeset_18--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_19
+
+--changeset_19
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 19
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "COST_TRANSCODES", "Name": "成本模块生成的凭证代码", "U_Category": "凭证与对账", "U_Value": "MR01,MR02,YF01,PP01,WW01,IO01,IO02,PP04,PP05,WW03,DN01,DN02,DN03,DN04,AR03,AR04,JZ01,JZ03,JZ04,PUR1,PUR2,PUR3,PUR4,PUR5", "U_DataType": "列表", "U_Hint": "凭证代码逗号分隔；要和代码实际生成的一致，不要随意增删"}
+
+--changeset_19--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_20
+
+--changeset_20
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 20
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "JV_REV_TRANSCODES", "Name": "凭单下月初自动冲销的凭证代码", "U_Category": "凭证与对账", "U_Value": "AR03,AR04", "U_DataType": "列表", "U_Hint": "凭证代码逗号分隔，如 AR03,AR04"}
+
+--changeset_20--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_21
+
+--changeset_21
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 21
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "RECON_BLOCK_ON", "Name": "财务对账按哪列差额阻断", "U_Category": "凭证与对账", "U_Value": "CUR", "U_DataType": "文字", "U_Hint": "CUR 本期差额（期初差额只列示）/ END 期末差额"}
+
+--changeset_21--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_22
+
+--changeset_22
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 22
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "RECON_COSTONLY_AREAS", "Name": "只比较成本凭证的对账项", "U_Category": "凭证与对账", "U_Value": "WIP_PROD,GOODS,WW_MAT", "U_DataType": "列表", "U_Hint": "可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP，逗号分隔"}
+
+--changeset_22--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_23
+
+--changeset_23
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 23
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "PUR2_REV_ACCTS", "Name": "PUR2 冲回发票凭证的科目", "U_Category": "凭证与对账", "U_Value": "1403,1405,1409,220202", "U_DataType": "列表", "U_Hint": "科目或前 4 位，逗号分隔，如 1403,1405,1409,220202"}
+
+--changeset_23--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_24
+
+--changeset_24
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 24
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "PUR3_REV_ACCTS", "Name": "PUR3 冲回发票凭证的科目", "U_Category": "凭证与对账", "U_Value": "140802", "U_DataType": "列表", "U_Hint": "科目或前 4 位，逗号分隔，如 140802"}
+
+--changeset_24--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_25
+
+--changeset_25
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 25
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "TB_EXTRA_ACCTS", "Name": "科目余额表额外列出的科目", "U_Category": "凭证与对账", "U_Value": "", "U_DataType": "列表", "U_Hint": "科目或科目前缀，逗号分隔，可以为空，如 6602,1122"}
+
+--changeset_25--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_26
+
+--changeset_26
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 26
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "SAMPLE_VAT_RATE", "Name": "样品视同销售税率", "U_Category": "凭证与对账", "U_Value": "0.13", "U_DataType": "数字", "U_Hint": "小数，如 0.13"}
+
+--changeset_26--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_27
+
+--changeset_27
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 27
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "SAMPLE_VAT_DIV", "Name": "国内样品销项税除数", "U_Category": "凭证与对账", "U_Value": "1.13", "U_DataType": "数字", "U_Hint": "销项税 = 数量 × 平台价 ÷ 本值 × 税率，如 1.13"}
+
+--changeset_27--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_28
+
+--changeset_28
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 28
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "SAMPLE_EXPORT_FACTOR", "Name": "国外样品销项税成本倍数", "U_Category": "凭证与对账", "U_Value": "1.5", "U_DataType": "数字", "U_Hint": "销项税 = 成本 × 本值 × 税率，如 1.5"}
+
+--changeset_28--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_29
+
+--changeset_29
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 29
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "WW_WORTYPES", "Name": "委外工单的订单类型", "U_Category": "业务口径", "U_Value": "50", "U_DataType": "列表", "U_Hint": "U_OrdType 逗号分隔，如 50；改了要同步改费用池分摊范围的订单类型"}
+
+--changeset_29--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_30
+
+--changeset_30
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 30
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "REWORK_WORTYPES", "Name": "返工单的订单类型", "U_Category": "业务口径", "U_Value": "30", "U_DataType": "列表", "U_Hint": "U_OrdType 逗号分隔，如 30"}
+
+--changeset_30--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_31
+
+--changeset_31
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 31
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "TRIAL_WORTYPES", "Name": "试打订单的订单类型", "U_Category": "业务口径", "U_Value": "40", "U_DataType": "列表", "U_Hint": "U_OrdType 逗号分隔，如 40"}
+
+--changeset_31--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_32
+
+--changeset_32
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 32
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "TRIAL_ISSUE_BUSITYPES", "Name": "试打允许的领料业务类型", "U_Category": "业务口径", "U_Value": "307,305", "U_DataType": "列表", "U_Hint": "@U_CIOTRN.Code 逗号分隔，如 307,305"}
+
+--changeset_32--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_33
+
+--changeset_33
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 33
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CONV_IN_BUSITYPE", "Name": "形态转换转入业务类型", "U_Category": "业务口径", "U_Value": "204", "U_DataType": "文字", "U_Hint": "@U_CIOTRN.Code，如 204（I05）"}
+
+--changeset_33--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_34
+
+--changeset_34
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 34
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CONV_OUT_BUSITYPE", "Name": "形态转换转出业务类型", "U_Category": "业务口径", "U_Value": "205", "U_DataType": "文字", "U_Hint": "@U_CIOTRN.Code，如 205（O05）"}
+
+--changeset_34--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_35
+
+--changeset_35
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 35
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "RETURN_BUSITYPES", "Name": "生产退料业务类型", "U_Category": "业务口径", "U_Value": "304", "U_DataType": "列表", "U_Hint": "@U_CIOTRN.Code 逗号分隔，如 304"}
+
+--changeset_35--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_36
+
+--changeset_36
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 36
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "SAMPLE_SALTYPES", "Name": "样品销售的业务类型", "U_Category": "业务口径", "U_Value": "样品销售", "U_DataType": "列表", "U_Hint": "@MTC_SALORDTYPE.U_BusiType 逗号分隔，如 样品销售"}
+
+--changeset_36--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_37
+
+--changeset_37
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 37
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CUST_DOM", "Name": "国内客户的客户类型", "U_Category": "业务口径", "U_Value": "国内客户", "U_DataType": "文字", "U_Hint": "@MTC_SALORDTYPE.U_CustType，如 国内客户"}
+
+--changeset_37--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_38
+
+--changeset_38
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 38
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "CUST_EXP", "Name": "国外客户的客户类型", "U_Category": "业务口径", "U_Value": "国外客户", "U_DataType": "文字", "U_Hint": "@MTC_SALORDTYPE.U_CustType，如 国外客户"}
+
+--changeset_38--
+--batch_mtc
+Content-Type: multipart/mixed;boundary=changeset_39
+
+--changeset_39
+Content-Type: application/http
+Content-Transfer-Encoding: binary
+Content-ID: 39
+
+POST /b1s/v1/MTC_CA_PARAM
+Content-Type: application/json
+
+{"Code": "PRE08_EXCL_WHS", "Name": "PRE-08 不报的不计价仓库", "U_Category": "尾差与校验", "U_Value": "", "U_DataType": "列表", "U_Hint": "仓库代码逗号分隔，可以为空，如 S300,WX01"}
+
+--changeset_39--
+--batch_mtc--

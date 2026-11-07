@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成本执行台 · 登录</title>
+<!-- 服务器模式（dev_server.py --server）的登录页：用 B1 账号密码登录，服务端经 Service Layer 验证，权限取 OUSR 自定义字段。 -->
+<style>
+:root { --bg:#f6f3ee; --card:#fff; --fg:#2b2622; --mute:#7a7068; --line:#e2dbd2; --accent:#a8572c; --err:#b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#1c1a18; --card:#262321; --fg:#ece6df; --mute:#a59b91; --line:#3a3532; --accent:#e08a5a; --err:#ff8a80; } }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--fg);
+  font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; padding:16px; }
+form { width:100%; max-width:340px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:28px 24px; }
+h1 { font-size:18px; margin:0 0 4px; }
+p { margin:0 0 18px; color:var(--mute); font-size:13px; }
+label { display:block; font-size:13px; margin:12px 0 4px; }
+input { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; }
+input:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+button { margin-top:20px; width:100%; padding:9px; border:0; border-radius:6px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+button:disabled { opacity:.6; cursor:default; }
+.err { color:var(--err); font-size:13px; margin-top:12px; min-height:1em; }
+</style>
+</head>
+<body>
+<form id="f" autocomplete="on">
+  <h1>成本执行台</h1>
+  <p>用 SAP Business One 账号登录</p>
+  <label for="u">B1 用户代码</label>
+  <input id="u" name="username" autocomplete="username" maxlength="50" required autofocus>
+  <label for="p">密码</label>
+  <input id="p" name="password" type="password" autocomplete="current-password" required>
+  <button id="b" type="submit">登录</button>
+  <div class="err" id="e"></div>
+</form>
+<script>
+"use strict";
+try { const u = localStorage.getItem("cc.loginUser"); if (u) { document.getElementById("u").value = u; document.getElementById("p").focus(); } } catch (e) {}
+document.getElementById("f").onsubmit = async ev => {
+  ev.preventDefault();
+  const b = document.getElementById("b"), e = document.getElementById("e"), user = document.getElementById("u").value.trim();
+  b.disabled = true; b.textContent = "正在验证…"; e.textContent = "";
+  try {
+    const r = await fetch("/api/login", {method:"POST", headers:{"X-Requested-With":"cost-console", "Content-Type":"application/json"},
+      body:JSON.stringify({user, password:document.getElementById("p").value})});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "登录失败");
+    try { localStorage.setItem("cc.loginUser", user); } catch (x) {}
+    location.replace("/" + location.hash);   // 带着原来的链接（#页面?run=…）进去
+  } catch (x) { e.textContent = x.message; b.disabled = false; b.textContent = "登录"; }
+};
+</script>
+</body>
+</html>

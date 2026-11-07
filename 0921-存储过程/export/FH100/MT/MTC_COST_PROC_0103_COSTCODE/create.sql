@@ -1,0 +1,38 @@
+CREATE PROCEDURE "MTC_COST_PROC_0103_COSTCODE"(IN UserCode NVARCHAR(50))
+LANGUAGE SQLSCRIPT
+AS
+BEGIN
+	
+	/* created by chri.li 2024.11.23
+     * 抽取物料等级 到 明细到静态表 MTC_COST_0105_ITEM
+     * CALL "MTC_COST_PROC_0103_COSTCODE"(0,'2024-01','manager');
+    */
+	
+	
+	INSERT INTO MTC_COST_0103_COSTCODE(
+	 "CostStepCode"
+	,"CostStepName"
+	,"CreateDate"		--创建时间
+	,"Creator")
+	SELECT 'A1','原材料'
+	,CURRENT_TIMESTAMP
+	,:UserCode
+	FROM DUMMY
+	UNION ALL
+	SELECT 'B1','委外加工'
+	,CURRENT_TIMESTAMP
+	,:UserCode
+	FROM DUMMY
+	UNION ALL
+	SELECT 'C1','半成品'
+	,CURRENT_TIMESTAMP
+	,:UserCode
+	FROM DUMMY
+	UNION ALL
+	SELECT 'D1','产成品'
+	,CURRENT_TIMESTAMP
+	,:UserCode
+	FROM DUMMY
+	;
+
+END

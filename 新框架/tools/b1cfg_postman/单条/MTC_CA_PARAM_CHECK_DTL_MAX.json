@@ -1,0 +1,8 @@
+{
+  "Code": "CHECK_DTL_MAX",
+  "Name": "每项校验保留明细行数",
+  "U_Category": "尾差与校验",
+  "U_Value": "200",
+  "U_DataType": "整数",
+  "U_Hint": "整数，如 200"
+}

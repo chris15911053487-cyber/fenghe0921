@@ -1,0 +1,8 @@
+{
+  "Code": "LEGACY_INITPRICE_DATE",
+  "Name": "按 U_InitPrice 取成本的截止日",
+  "U_Category": "计算控制",
+  "U_Value": "2024-12-31",
+  "U_DataType": "日期",
+  "U_Hint": "YYYY-MM-DD，该日及以前的交货 / 退货按行上 U_InitPrice 取成本"
+}

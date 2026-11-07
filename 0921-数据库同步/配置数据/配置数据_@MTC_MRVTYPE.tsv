@@ -1,0 +1,4 @@
+Code	Name	U_StockCode	U_StockName	U_AcctCode	U_AcctName
+WW	委外发票差异			140803	委托加工物资-加工费暂估差异
+MRV1	手工重估		取物料组对应的物料组科目	510199	制造费用-关闭工单差异
+MRV2	0数量有金额差异			510197

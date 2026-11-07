@@ -1,0 +1,8 @@
+{
+  "Code": "CUST_EXP",
+  "Name": "国外客户的客户类型",
+  "U_Category": "业务口径",
+  "U_Value": "国外客户",
+  "U_DataType": "文字",
+  "U_Hint": "@MTC_SALORDTYPE.U_CustType，如 国外客户"
+}

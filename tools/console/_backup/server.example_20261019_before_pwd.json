@@ -1,0 +1,17 @@
+{
+  "_说明": "成本执行台服务器模式配置（dev_server.py --server）。复制为 server.json 后修改；server.json 不要发布或打包。详见 tools/README.md“服务器部署”。",
+  "listen": "0.0.0.0",
+  "port": 8766,
+  "schema": "FH100",
+  "hana": { "key": "MTCCA" },
+  "_hana_说明": "推荐用 hdbuserstore 键（在服务账号下执行 hdbuserstore SET MTCCA \"HANA主机:30013@租户库\" 数据库账号 密码），配置文件里不出现密码。也可以写 address / port / databaseName / user / password，这时要把 server.json 的读取权限限制为管理员和服务账号。没装 hdbcli 时自动走本机 HANA ODBC 驱动（HDBODBC / 32 位 Python 用 HDBODBC32），此时还可以写 \"dsn\": \"ODBC 数据源名\"（加 user / password），或 \"odbc\": \"完整连接串\"，或 \"driver\" 指定驱动名；\"via\": \"odbc\" 强制走 ODBC。",
+  "sl": { "url": "https://HANA主机:50000/b1s/v1", "company": "FH100", "verify": false },
+  "_sl_说明": "只用来验证登录人的 B1 密码（/Login 后立即 /Logout）。company 是 B1 公司库名，一般与 schema 相同；Service Layer 用的是自签名证书时 verify 填 false。",
+  "roleField": "U_MTC_CARole",
+  "_roleField_说明": "OUSR 上的自定义字段：R 查看 / O 操作（只做检查、模拟计算、场景维护）/ A 管理（正式计算、期初承接）；为空不能登录。在 B1 前台“工具 → 定制工具 → 用户定义字段 - 管理 → 设置 → 常规 → 用户”手工添加（字段名 MTC_CARole，字母数字 1 位，有效值 R/O/A）。",
+  "allowNets": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"],
+  "idleMinutes": 480,
+  "poolSize": 4,
+  "tls": null,
+  "_tls_说明": "启用 HTTPS 时写 {\"cert\": \"server.crt\", \"key\": \"server.key\"}（PEM，相对 tools/console/ 目录）；启用后浏览器地址改为 https://。"
+}

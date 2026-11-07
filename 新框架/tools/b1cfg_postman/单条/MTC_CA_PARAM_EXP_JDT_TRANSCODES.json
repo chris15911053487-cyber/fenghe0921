@@ -1,0 +1,8 @@
+{
+  "Code": "EXP_JDT_TRANSCODES",
+  "Name": "计入费用池的凭证代码",
+  "U_Category": "费用归集",
+  "U_Value": "空,PP03,MR03,MR11,MR12",
+  "U_DataType": "列表",
+  "U_Hint": "OJDT.TransCode，逗号分隔；“空”= 没有凭证代码的手工凭证。如 空,PP03,MR03,MR11,MR12"
+}

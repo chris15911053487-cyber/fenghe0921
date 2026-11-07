@@ -1,0 +1,1933 @@
+{
+  "_说明": "成本报表定义（单一来源，用户 2026-10-30）：编号、过程、名称、分组、说明、参数（顺序 = 过程参数顺序）、双击钻取。改了以后运行 python3 新框架/tools/gen_rpt.py，重新生成 B1查询语句.md、执行台 js/rptdefs.js 和 actions.json 的 rpt* 项。drill.set 的值：列名 = 取双击行的该列，= 开头的列名 = 精确匹配，@参数 = 沿用当前参数，' 开头 = 固定值（如 '2）。",
+  "reports": [
+    {
+      "id": "00",
+      "proc": "MTC_CA_RPT_00_RUN",
+      "name": "成本报表运行状态",
+      "grp": "核算结果",
+      "desc": "各账期的报表取的是哪次运行（已生成凭单取凭单所用运行，否则取最近一次成功正式运行）、什么时候算的、凭单批号。所有报表都按这个规则取数，与执行台顶栏所选的运行无关。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近 12 个账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        }
+      ]
+    },
+    {
+      "id": "01",
+      "proc": "MTC_CA_RPT_01_ORDCALC",
+      "name": "产品成本计算单",
+      "grp": "核算结果",
+      "desc": "每张订单：期初在产品 + 本期投入 + 本级分摊 = 完工转出 + 关单差异 + 期末在产品（四项要素），“勾稽差额”应为 0。完工转出合计 = R02 = R03 生产入库；期末在产品 = R09 在产品业务端。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "WorType",
+          "label": "订单类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "10",
+              "10 生产计划单"
+            ],
+            [
+              "20",
+              "20 包装计划单"
+            ],
+            [
+              "30",
+              "30 返工计划单"
+            ],
+            [
+              "40",
+              "40 生产试打"
+            ],
+            [
+              "50",
+              "50 委外工单"
+            ],
+            [
+              "10,20,30,40",
+              "生产类（10–40）"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "OrderNum",
+          "label": "订单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "产品物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Scope",
+          "label": "订单范围",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "1",
+              "本期有完工"
+            ],
+            [
+              "2",
+              "本期按关单处理"
+            ],
+            [
+              "3",
+              "期末有在产品"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按订单"
+            ],
+            [
+              "1",
+              "订单 × 材料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "OrderNum": "=订单号 Num",
+            "FcFrom": "账期",
+            "FcTo": "账期"
+          }
+        }
+      }
+    },
+    {
+      "id": "02",
+      "proc": "MTC_CA_RPT_02_PRODCOST",
+      "name": "完工产品成本汇总",
+      "grp": "核算结果",
+      "desc": "每个产品本期完工数量、四项成本、单位成本和构成 %（含本级分摊）。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Lvl",
+          "label": "层级",
+          "type": "text",
+          "hint": "0–8，多个用逗号"
+        },
+        {
+          "name": "WorType",
+          "label": "订单类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "10",
+              "10 生产计划单"
+            ],
+            [
+              "20",
+              "20 包装计划单"
+            ],
+            [
+              "30",
+              "30 返工计划单"
+            ],
+            [
+              "40",
+              "40 生产试打"
+            ],
+            [
+              "50",
+              "50 委外工单"
+            ],
+            [
+              "10,20,30,40",
+              "生产类（10–40）"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按产品"
+            ],
+            [
+              "1",
+              "产品 × 订单"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Item": "=产品"
+          }
+        }
+      }
+    },
+    {
+      "id": "03",
+      "proc": "MTC_CA_RPT_03_INVSUM",
+      "name": "存货收发存汇总",
+      "grp": "核算结果",
+      "desc": "期初、入库、出库、期末的数量和金额；可展开四项要素、按收发类别分列（带符号，期初 + 各列 = 期末）。期末合计 = R09 存货业务端。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Lvl",
+          "label": "层级",
+          "type": "text",
+          "hint": "0–8，多个用逗号"
+        },
+        {
+          "name": "ShowElem",
+          "label": "展开四项",
+          "type": "yn",
+          "def": "N"
+        },
+        {
+          "name": "ByCat",
+          "label": "按收发类别分列",
+          "type": "yn",
+          "def": "N"
+        },
+        {
+          "name": "NonZero",
+          "label": "只看有数",
+          "type": "yn",
+          "def": "Y"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按物料"
+            ],
+            [
+              "1",
+              "按物料组"
+            ],
+            [
+              "2",
+              "按存货科目"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "to": "04",
+          "set": {
+            "Item": "=代码",
+            "FcFrom": "@FcFrom",
+            "FcTo": "@FcTo"
+          }
+        },
+        "1": {
+          "stype": "0",
+          "set": {
+            "ItemGrp": "代码"
+          }
+        }
+      }
+    },
+    {
+      "id": "04",
+      "proc": "MTC_CA_RPT_04_LEDGER",
+      "name": "存货明细账",
+      "grp": "核算结果",
+      "desc": "逐条库存变动和结存（结存按物料全部变动累计，再按条件筛选）。尾差结转（JZ04）放在期末日。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Trans",
+          "label": "交易类型",
+          "type": "text",
+          "hint": "如 I01,O03"
+        },
+        {
+          "name": "Dir",
+          "label": "方向",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "I",
+              "入库"
+            ],
+            [
+              "O",
+              "出库"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "OrderNum",
+          "label": "订单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "Whs",
+          "label": "仓库",
+          "type": "text",
+          "hint": "仓库代码，多个用逗号"
+        }
+      ],
+      "need": [
+        "Item",
+        "ItemGrp",
+        "Trans",
+        "OrderNum",
+        "Whs"
+      ]
+    },
+    {
+      "id": "05",
+      "proc": "MTC_CA_RPT_05_MATUSE",
+      "name": "材料耗用汇总",
+      "grp": "核算结果",
+      "desc": "材料领用到哪里去了：生产 / 返工 / 委外 / 试打（按订单类型参数）、其他出入库 / 销售 / 盘点 / 形态转换（按交易类型），耗用 = 出库成本（退料冲减）。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "材料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "材料物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Dest",
+          "label": "去向",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "生产",
+              "生产"
+            ],
+            [
+              "返工",
+              "返工"
+            ],
+            [
+              "委外",
+              "委外"
+            ],
+            [
+              "试打",
+              "试打"
+            ],
+            [
+              "其他出入库",
+              "其他出入库"
+            ],
+            [
+              "销售",
+              "销售"
+            ],
+            [
+              "盘点",
+              "盘点"
+            ],
+            [
+              "形态转换",
+              "形态转换"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "Prod",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "材料 × 去向"
+            ],
+            [
+              "1",
+              "材料 × 订单或科目"
+            ],
+            [
+              "2",
+              "产品 × 材料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Item": "=材料",
+            "Dest": "去向"
+          }
+        }
+      }
+    },
+    {
+      "id": "06",
+      "proc": "MTC_CA_RPT_06_EXPALLOC",
+      "name": "制造费用 / 人工分配表",
+      "grp": "核算结果",
+      "desc": "费用池归集了多少（凭证、重估、公摊材料、关单差异）、按工时（单位工时 × 本期入库数）分给了哪些产品和订单、没分到的原因。已分配 = R01 本级分摊；未分配应为 0。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Pool",
+          "label": "费用池",
+          "type": "pool",
+          "hint": "费用池代码"
+        },
+        {
+          "name": "Elem",
+          "label": "要素",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "两项"
+            ],
+            [
+              "MFG",
+              "制造费用"
+            ],
+            [
+              "LAB",
+              "人工"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "Prod",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "费用池汇总"
+            ],
+            [
+              "1",
+              "池 × 产品（含未分到原因）"
+            ],
+            [
+              "2",
+              "池 × 订单"
+            ],
+            [
+              "3",
+              "归集来源明细"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "2",
+          "set": {
+            "Pool": "费用池",
+            "FcFrom": "账期",
+            "FcTo": "账期"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "Pool": "费用池",
+            "Prod": "=产品",
+            "FcFrom": "账期",
+            "FcTo": "账期"
+          }
+        }
+      }
+    },
+    {
+      "id": "07",
+      "proc": "MTC_CA_RPT_07_SUBCON",
+      "name": "委外加工成本表",
+      "grp": "核算结果",
+      "desc": "委外订单（参数 WW_WORTYPES）发出材料、加工费（暂估金额）、完工成本、期末在产品，按供应商汇总。期末在产品·材料 / 加工费 = 140801 / 140802 业务端。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Vendor",
+          "label": "供应商",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OCRD.CardCode"
+        },
+        {
+          "name": "OrderNum",
+          "label": "订单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "Prod",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按供应商"
+            ],
+            [
+              "1",
+              "按订单"
+            ],
+            [
+              "2",
+              "订单 × 材料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Vendor": "=供应商"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "OrderNum": "=订单号 Num",
+            "FcFrom": "账期",
+            "FcTo": "账期"
+          }
+        }
+      }
+    },
+    {
+      "id": "08",
+      "proc": "MTC_CA_RPT_08_SALECOST",
+      "name": "销售成本计算表",
+      "grp": "核算结果",
+      "desc": "期初发出商品 + 本期发货 − 独立退货 − 本期消耗（开票、贷项、基于交货退货、尾差）= 期末发出商品；销售成本 = DN03（非样品），样品单列。“勾稽差额”应为 0。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Cust",
+          "label": "客户",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OCRD.CardCode"
+        },
+        {
+          "name": "CustType",
+          "label": "客户类型",
+          "type": "custType"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按产品"
+            ],
+            [
+              "1",
+              "按客户"
+            ],
+            [
+              "2",
+              "按交货 / 退货行"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "2",
+          "set": {
+            "Item": "=代码"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "Cust": "=代码"
+          }
+        }
+      }
+    },
+    {
+      "id": "19",
+      "proc": "MTC_CA_RPT_19_WIPSUM",
+      "name": "在产品汇总表",
+      "grp": "核算结果",
+      "desc": "期初在产品 + 本期领料 + 本级分摊 − 完工转出 − 关单差异 = 期末在产品（材料 / 人工 / 制造 / 委外四项），按订单类型、产品、材料或订单汇总；核算类别按参数 WW_WORTYPES 分生产 / 委外。本级分摊随完工全部转出，按材料显示时单列一行。“勾稽差额”应为 0；期末在产品合计 = R01 期末在产品 = R09 在产品业务端。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "WorType",
+          "label": "订单类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "10",
+              "10 生产计划单"
+            ],
+            [
+              "20",
+              "20 包装计划单"
+            ],
+            [
+              "30",
+              "30 返工计划单"
+            ],
+            [
+              "40",
+              "40 生产试打"
+            ],
+            [
+              "50",
+              "50 委外工单"
+            ],
+            [
+              "10,20,30,40",
+              "生产类（10–40）"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "产品物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Mat",
+          "label": "材料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "NonZero",
+          "label": "只看有在产品或有发生",
+          "type": "yn",
+          "def": "Y"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按订单类型"
+            ],
+            [
+              "1",
+              "按产品"
+            ],
+            [
+              "2",
+              "按材料"
+            ],
+            [
+              "3",
+              "按订单"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "3",
+          "set": {
+            "WorType": "订单类型"
+          }
+        },
+        "1": {
+          "stype": "3",
+          "set": {
+            "Item": "=产品"
+          }
+        },
+        "2": {
+          "to": "20",
+          "set": {
+            "Mat": "=材料",
+            "WorType": "@WorType",
+            "Item": "@Item",
+            "ItemGrp": "@ItemGrp"
+          }
+        },
+        "3": {
+          "to": "20",
+          "set": {
+            "OrderNum": "=订单号 Num",
+            "Scope": "'2"
+          }
+        }
+      }
+    },
+    {
+      "id": "20",
+      "proc": "MTC_CA_RPT_20_WIPDTL",
+      "name": "在产品明细表",
+      "grp": "核算结果",
+      "desc": "一行 = 账期 × 订单 × 材料（含委外加工费）：计划用量、按完工折算用量、累计领料，期初在产品 + 本期领料 − 完工转出 − 关单差异 = 期末在产品（四项）。“期末在产品·折算数量”按金额比例折算，只供参考。本级分摊不留在在产品里，不在本表。双击一行看这张订单这个材料的存货明细账。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "WorType",
+          "label": "订单类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "10",
+              "10 生产计划单"
+            ],
+            [
+              "20",
+              "20 包装计划单"
+            ],
+            [
+              "30",
+              "30 返工计划单"
+            ],
+            [
+              "40",
+              "40 生产试打"
+            ],
+            [
+              "50",
+              "50 委外工单"
+            ],
+            [
+              "10,20,30,40",
+              "生产类（10–40）"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "OrderNum",
+          "label": "订单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "产品物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Mat",
+          "label": "材料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "Scope",
+          "label": "范围",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "期末有在产品"
+            ],
+            [
+              "1",
+              "期初或期末有在产品"
+            ],
+            [
+              "2",
+              "全部（含本期已结转完的）"
+            ]
+          ],
+          "def": ""
+        }
+      ],
+      "drill": {
+        "0": {
+          "to": "04",
+          "set": {
+            "Item": "=材料",
+            "OrderNum": "=订单号 Num"
+          }
+        }
+      }
+    },
+    {
+      "id": "09",
+      "proc": "MTC_CA_RPT_09_RECON",
+      "name": "存货与生产成本对账",
+      "grp": "核对",
+      "desc": "业务端（新框架结果）与总账按对账项、科目逐项比较，期初 / 本期 / 期末分开列示；同执行台“财务对账”。按当前总账计算，账期内有新过账时结果会变。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Acct",
+          "label": "科目",
+          "type": "text",
+          "hint": "科目开头匹配"
+        },
+        {
+          "name": "OnlyDiff",
+          "label": "只看有差异",
+          "type": "yn",
+          "def": "Y"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "proc": "MTC_CA_RPT_10_JV",
+      "name": "成本凭证清单及来源",
+      "grp": "核对",
+      "desc": "本期成本凭证底稿（每种凭证代码一张）、B1 凭单批号和状态、分录、每笔分录的业务来源。来源明细合计 = 分录合计。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "TransCode",
+          "label": "凭证代码",
+          "type": "text",
+          "hint": "如 MR01,PP05"
+        },
+        {
+          "name": "Acct",
+          "label": "科目",
+          "type": "text",
+          "hint": "科目开头匹配"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按凭证代码"
+            ],
+            [
+              "1",
+              "分录"
+            ],
+            [
+              "2",
+              "来源明细"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "TransCode": "凭证代码"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "TransCode": "凭证代码",
+            "Acct": "=科目"
+          }
+        }
+      }
+    },
+    {
+      "id": "11",
+      "proc": "MTC_CA_RPT_11_EXCEPT",
+      "name": "成本异常清单",
+      "grp": "核对",
+      "desc": "本期需要看一眼的：物料标记（负库存、兜底价、无价）、期末异常、单价比上期变动超过阈值、订单（单位成本 ≤ 0、在产品为负、关单差异）、费用池未分配完、计算后校验不通过或警告。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Cat",
+          "label": "类别",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "FLAG",
+              "物料标记"
+            ],
+            [
+              "STOCK",
+              "期末异常"
+            ],
+            [
+              "PRICE",
+              "单价变动"
+            ],
+            [
+              "ORDER",
+              "订单"
+            ],
+            [
+              "POOL",
+              "费用池"
+            ],
+            [
+              "CHECK",
+              "校验"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "PricePct",
+          "label": "单价变动阈值 %",
+          "type": "num",
+          "def": "20",
+          "hint": ""
+        },
+        {
+          "name": "AmtMin",
+          "label": "关单差异金额阈值",
+          "type": "num",
+          "def": "0",
+          "hint": ""
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "proc": "MTC_CA_RPT_12_COSTVAR",
+      "name": "产品单位成本变动分析",
+      "grp": "管理分析",
+      "desc": "两期都有完工的产品，单位成本变动拆成材料价格、材料用量、费率、工时、委外加工费和其他因素（每件产品）。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "CmpFc",
+          "label": "对比账期",
+          "type": "fc",
+          "hint": "空 = 上期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "MinPct",
+          "label": "只看变动超过 %",
+          "type": "num",
+          "def": "",
+          "hint": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按产品"
+            ],
+            [
+              "1",
+              "产品 × 材料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Item": "=产品"
+          }
+        }
+      }
+    },
+    {
+      "id": "13",
+      "proc": "MTC_CA_RPT_13_USAGE",
+      "name": "材料用量差异（损耗）",
+      "grp": "管理分析",
+      "desc": "订单累计实际领用与按累计完工数折算的计划用量之差，差异金额 = 差异数量 × 平均领料单价。关单订单的差异就是全部损耗。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Scope",
+          "label": "订单范围",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "本期按关单处理"
+            ],
+            [
+              "1",
+              "本期有完工"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "WorType",
+          "label": "订单类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "10",
+              "10 生产计划单"
+            ],
+            [
+              "20",
+              "20 包装计划单"
+            ],
+            [
+              "30",
+              "30 返工计划单"
+            ],
+            [
+              "40",
+              "40 生产试打"
+            ],
+            [
+              "50",
+              "50 委外工单"
+            ],
+            [
+              "10,20,30,40",
+              "生产类（10–40）"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "Item",
+          "label": "产品",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "Mat",
+          "label": "材料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "MinPct",
+          "label": "只看差异超过 %",
+          "type": "num",
+          "def": "",
+          "hint": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "产品 × 材料"
+            ],
+            [
+              "1",
+              "订单 × 材料"
+            ],
+            [
+              "2",
+              "按材料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Item": "=产品",
+            "Mat": "=材料"
+          }
+        },
+        "2": {
+          "stype": "0",
+          "set": {
+            "Mat": "=材料"
+          }
+        }
+      }
+    },
+    {
+      "id": "14",
+      "proc": "MTC_CA_RPT_14_MARGIN",
+      "name": "产品毛利分析",
+      "grp": "管理分析",
+      "desc": "本期应收发票 − 贷项的收入（本币不含税，取消单反号）与结转的销售成本（同 DN03：发票消耗交货的成本 + 开票完毕的尾差）。不基于交货的发票行没有成本。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "Cust",
+          "label": "客户",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OCRD.CardCode"
+        },
+        {
+          "name": "CustType",
+          "label": "客户类型",
+          "type": "custType"
+        },
+        {
+          "name": "SalType",
+          "label": "销售订单类型",
+          "type": "salType"
+        },
+        {
+          "name": "InclSample",
+          "label": "含样品",
+          "type": "yn",
+          "def": "N"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按产品"
+            ],
+            [
+              "1",
+              "按客户"
+            ],
+            [
+              "2",
+              "客户 × 产品"
+            ],
+            [
+              "3",
+              "发票行"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "3",
+          "set": {
+            "Item": "=物料"
+          }
+        },
+        "1": {
+          "stype": "3",
+          "set": {
+            "Cust": "=客户"
+          }
+        },
+        "2": {
+          "stype": "3",
+          "set": {
+            "Cust": "=客户",
+            "Item": "=物料"
+          }
+        }
+      }
+    },
+    {
+      "id": "15",
+      "proc": "MTC_CA_RPT_15_POOLTREND",
+      "name": "费用池费用率趋势",
+      "grp": "管理分析",
+      "desc": "各期每个费用池的归集额、已分配、工时、每工时费用和环比。",
+      "params": [
+        {
+          "name": "FcFrom",
+          "label": "起始账期",
+          "type": "fc",
+          "hint": "空 = 最近 12 个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "FcTo",
+          "label": "截止账期",
+          "type": "fc",
+          "hint": "空 = 同起始账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Pool",
+          "label": "费用池",
+          "type": "pool",
+          "hint": "费用池代码"
+        },
+        {
+          "name": "Elem",
+          "label": "要素",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "两项"
+            ],
+            [
+              "MFG",
+              "制造费用"
+            ],
+            [
+              "LAB",
+              "人工"
+            ]
+          ],
+          "def": ""
+        }
+      ]
+    },
+    {
+      "id": "16",
+      "proc": "MTC_CA_RPT_16_INVSTRUCT",
+      "name": "期末存货结构",
+      "grp": "管理分析",
+      "desc": "期末存货按类别（原材料 / 半成品 / 产成品 / 在产品 / 发出商品，参数 RPT_GRP_CLASS）、物料组、物料的金额和占比，与对比期比较；按物料时带最后动账日期。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "CmpFc",
+          "label": "对比账期",
+          "type": "fc",
+          "hint": "空 = 上期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Cls",
+          "label": "存货类别",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "原材料",
+              "原材料"
+            ],
+            [
+              "半成品",
+              "半成品"
+            ],
+            [
+              "产成品",
+              "产成品"
+            ],
+            [
+              "在产品",
+              "在产品"
+            ],
+            [
+              "发出商品",
+              "发出商品"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按类别"
+            ],
+            [
+              "1",
+              "类别 × 物料组"
+            ],
+            [
+              "2",
+              "按物料"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "1",
+          "set": {
+            "Cls": "存货类别"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "Cls": "存货类别",
+            "ItemGrp": "物料组"
+          }
+        }
+      }
+    },
+    {
+      "id": "17",
+      "proc": "MTC_CA_RPT_17_APACCR",
+      "name": "应付暂估（已收货未开票）",
+      "grp": "核对",
+      "desc": "截至期末未清的收货行（扣已开票、扣基于收货的退货）和不基于收货的退货（为负），含账龄、暂估单价来源、本期变动、与总账 220202 按供应商核对。与 PUR1–PUR5 凭证取自同一次运行。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Vendor",
+          "label": "供应商",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OCRD.CardCode"
+        },
+        {
+          "name": "AccrType",
+          "label": "暂估类型",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "MAT",
+              "材料"
+            ],
+            [
+              "SUBFEE",
+              "委外加工费"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "DocNum",
+          "label": "收货单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "AgeDays",
+          "label": "账龄 ≥ 天数",
+          "type": "num",
+          "def": "",
+          "hint": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按供应商（账龄）"
+            ],
+            [
+              "1",
+              "供应商 × 物料"
+            ],
+            [
+              "2",
+              "单据行"
+            ],
+            [
+              "3",
+              "本期变动"
+            ],
+            [
+              "4",
+              "与总账核对"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "2",
+          "set": {
+            "Vendor": "=供应商"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "Vendor": "=供应商",
+            "Item": "=物料"
+          }
+        },
+        "3": {
+          "stype": "2",
+          "set": {
+            "Vendor": "=供应商"
+          }
+        },
+        "4": {
+          "stype": "2",
+          "set": {
+            "Vendor": "=供应商"
+          }
+        }
+      }
+    },
+    {
+      "id": "18",
+      "proc": "MTC_CA_RPT_18_GOODSOUT",
+      "name": "发出商品（已发货未开票）",
+      "grp": "核对",
+      "desc": "截至期末未开票的交货行（扣已开票、扣基于交货的退货）和不基于交货的退货（为负），含账龄、单位成本来源、未开票销售金额、本期变动、与 AR03 / AR04 计提核对。",
+      "params": [
+        {
+          "name": "Fc",
+          "label": "账期",
+          "type": "fc",
+          "hint": "空 = 最近一个已计算账期",
+          "b1": "OFPR.Code"
+        },
+        {
+          "name": "Cust",
+          "label": "客户",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OCRD.CardCode"
+        },
+        {
+          "name": "CustType",
+          "label": "客户类型",
+          "type": "custType"
+        },
+        {
+          "name": "SalType",
+          "label": "销售订单类型",
+          "type": "salType"
+        },
+        {
+          "name": "Item",
+          "label": "物料",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配",
+          "b1": "OITM.ItemCode"
+        },
+        {
+          "name": "ItemGrp",
+          "label": "物料组",
+          "type": "grp",
+          "hint": "物料组代码，多个用逗号",
+          "b1": "OITB.ItmsGrpCod"
+        },
+        {
+          "name": "DocNum",
+          "label": "交货单号 Num",
+          "type": "text",
+          "hint": "开头匹配，多个用逗号；=开头精确匹配"
+        },
+        {
+          "name": "Sample",
+          "label": "样品",
+          "type": "sel",
+          "opts": [
+            [
+              "",
+              "全部"
+            ],
+            [
+              "Y",
+              "只看样品"
+            ],
+            [
+              "N",
+              "排除样品"
+            ]
+          ],
+          "def": ""
+        },
+        {
+          "name": "AgeDays",
+          "label": "账龄 ≥ 天数",
+          "type": "num",
+          "def": "",
+          "hint": ""
+        },
+        {
+          "name": "STYPE",
+          "label": "显示方式",
+          "type": "stype",
+          "opts": [
+            [
+              "0",
+              "按客户（账龄）"
+            ],
+            [
+              "1",
+              "客户 × 物料"
+            ],
+            [
+              "2",
+              "单据行"
+            ],
+            [
+              "3",
+              "本期变动"
+            ],
+            [
+              "4",
+              "与 AR03 / AR04 核对"
+            ]
+          ],
+          "def": "0"
+        }
+      ],
+      "drill": {
+        "0": {
+          "stype": "2",
+          "set": {
+            "Cust": "=客户"
+          }
+        },
+        "1": {
+          "stype": "2",
+          "set": {
+            "Cust": "=客户",
+            "Item": "=物料"
+          }
+        },
+        "3": {
+          "stype": "2",
+          "set": {
+            "Cust": "=客户"
+          }
+        }
+      }
+    }
+  ]
+}

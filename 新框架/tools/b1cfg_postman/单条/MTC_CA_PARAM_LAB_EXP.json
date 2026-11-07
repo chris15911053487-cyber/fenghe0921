@@ -1,0 +1,8 @@
+{
+  "Code": "LAB_EXP",
+  "Name": "人工费用科目",
+  "U_Category": "费用归集",
+  "U_Value": "500102",
+  "U_DataType": "文字",
+  "U_Hint": "科目代码，如 500102"
+}

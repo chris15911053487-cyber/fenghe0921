@@ -1,0 +1,1414 @@
+{
+  "info": {
+    "name": "MTC_CA 成本配置初始数据",
+    "description": "费用池 2 条 + 计算参数 38 条，经 Service Layer 写入 B1 UDO。先改集合变量，再用 Runner 按顺序执行。已存在的 Code 会返回 400/-2035，属正常（不覆盖）。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://B1服务器:50000/b1s/v1"
+    },
+    {
+      "key": "companyDB",
+      "value": "公司库名"
+    },
+    {
+      "key": "user",
+      "value": "manager"
+    },
+    {
+      "key": "password",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0 登录",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/Login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"CompanyDB\": \"{{companyDB}}\",\n  \"UserName\": \"{{user}}\",\n  \"Password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 费用池 MTC_CA_POOL",
+      "item": [
+        {
+          "name": "MFG 制造车间",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_POOL",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"MFG\",\n  \"Name\": \"制造车间\",\n  \"U_IsDefault\": \"Y\",\n  \"U_IsCloseDif\": \"Y\",\n  \"U_Descr\": \"旧 0312：成本中心不是 P017 的费用；关单差异也进这个池（Q10）\",\n  \"MTC_CA_POOL1Collection\": [],\n  \"MTC_CA_POOL2Collection\": [\n    {\n      \"U_MatchBy\": \"GRPTYPE\",\n      \"U_MatchVal\": \"B\",\n      \"U_WorTypes\": \"10,20,30,40\",\n      \"U_Descr\": \"车间类别 B（旧 0312 物料组 102）\"\n    },\n    {\n      \"U_MatchBy\": \"GRPTYPE\",\n      \"U_MatchVal\": \"C\",\n      \"U_WorTypes\": \"10,20,30,40\",\n      \"U_Descr\": \"车间类别 C（旧 0312 物料组 103）\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PKG 包装车间",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_POOL",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"PKG\",\n  \"Name\": \"包装车间\",\n  \"U_IsDefault\": \"N\",\n  \"U_IsCloseDif\": \"N\",\n  \"U_Descr\": \"旧 0312：成本中心 P017 的费用\",\n  \"MTC_CA_POOL1Collection\": [\n    {\n      \"U_OcrCode\": \"P017\",\n      \"U_Descr\": \"OPRC.U_CalType = P017 的成本中心都进包装车间（也可以直接填成本中心代码）\"\n    }\n  ],\n  \"MTC_CA_POOL2Collection\": [\n    {\n      \"U_MatchBy\": \"GRPTYPE\",\n      \"U_MatchVal\": \"A\",\n      \"U_WorTypes\": \"10,20,30,40\",\n      \"U_Descr\": \"车间类别 A 包装（旧 0312 物料组 101）\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 计算参数 MTC_CA_PARAM",
+      "item": [
+        {
+          "name": "MFG_EXP_PREFIX 制造费用科目前缀",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"MFG_EXP_PREFIX\",\n  \"Name\": \"制造费用科目前缀\",\n  \"U_Category\": \"费用归集\",\n  \"U_Value\": \"5101\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"凭证里以它开头的科目计入制造费用，如 5101\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "LAB_EXP 人工费用科目",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"LAB_EXP\",\n  \"Name\": \"人工费用科目\",\n  \"U_Category\": \"费用归集\",\n  \"U_Value\": \"500102\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"科目代码，如 500102\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EXP_JDT_TRANSCODES 计入费用池的凭证代码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"EXP_JDT_TRANSCODES\",\n  \"Name\": \"计入费用池的凭证代码\",\n  \"U_Category\": \"费用归集\",\n  \"U_Value\": \"空,PP03,MR03,MR11,MR12\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"OJDT.TransCode，逗号分隔；“空”= 没有凭证代码的手工凭证。如 空,PP03,MR03,MR11,MR12\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SUBFEE_ITEM 委外加工费物料",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"SUBFEE_ITEM\",\n  \"Name\": \"委外加工费物料\",\n  \"U_Category\": \"费用归集\",\n  \"U_Value\": \"X0510001\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"物料代码，如 X0510001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "START_FC 新框架起始账期",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"START_FC\",\n  \"Name\": \"新框架起始账期\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"2026-09\",\n  \"U_DataType\": \"账期\",\n  \"U_Hint\": \"YYYY-MM。上线后不要改，会打乱期初承接\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "BOOTSTRAP_FC 期初承接账期",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"BOOTSTRAP_FC\",\n  \"Name\": \"期初承接账期\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"2026-08\",\n  \"U_DataType\": \"账期\",\n  \"U_Hint\": \"YYYY-MM，从旧框架该期结果取期初。上线后不要改\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CONV_PRICE 收敛标准：单价",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CONV_PRICE\",\n  \"Name\": \"收敛标准：单价\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"0.000001\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"物料单价两轮之差的上限，如 0.000001；不清楚不要改\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CONV_AMT 收敛标准：金额",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CONV_AMT\",\n  \"Name\": \"收敛标准：金额\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"0.01\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"费用池、关单差异两轮之差的上限（元），如 0.01；不清楚不要改\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MAX_ITER 最大迭代轮数",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"MAX_ITER\",\n  \"Name\": \"最大迭代轮数\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"50\",\n  \"U_DataType\": \"整数\",\n  \"U_Hint\": \"整数，超过仍不收敛则不写结果，如 50\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "LEVEL_GUARD 层级计算保护上限",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"LEVEL_GUARD\",\n  \"Name\": \"层级计算保护上限\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"30\",\n  \"U_DataType\": \"整数\",\n  \"U_Hint\": \"整数，防循环引用，不是业务层数，如 30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QCP_PRICED_IN PRE-23 价格来源入库类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"QCP_PRICED_IN\",\n  \"Name\": \"PRE-23 价格来源入库类型\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"I01,I03,I05,I07,I08,I09,I90\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"交易类型逗号分隔，如 I01,I03,I05,I07,I08,I09,I90\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "LEGACY_INITPRICE_DATE 按 U_InitPrice 取成本的截止日",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"LEGACY_INITPRICE_DATE\",\n  \"Name\": \"按 U_InitPrice 取成本的截止日\",\n  \"U_Category\": \"计算控制\",\n  \"U_Value\": \"2024-12-31\",\n  \"U_DataType\": \"日期\",\n  \"U_Hint\": \"YYYY-MM-DD，该日及以前的交货 / 退货按行上 U_InitPrice 取成本\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TAIL_MAX 零库存尾差结转上限",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"TAIL_MAX\",\n  \"Name\": \"零库存尾差结转上限\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"0.02\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"元（含）：期末数量 0、金额在 ± 本值以内的结转 640101（JZ04），如 0.02\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TAIL_WARN 尾差报警下限",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"TAIL_WARN\",\n  \"Name\": \"尾差报警下限\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"0.1\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"元（含）：POST-14 挤进出库行的尾差绝对值达到本值才报，如 0.1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PRICE_JUMP_PCT 价格波动报警比例",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"PRICE_JUMP_PCT\",\n  \"Name\": \"价格波动报警比例\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"30\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"%：POST-14 价格波动 / 期末单价偏离，如 30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PRICE_JUMP_AMT 价格波动报警金额",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"PRICE_JUMP_AMT\",\n  \"Name\": \"价格波动报警金额\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"100\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"元：POST-14 价格波动的影响金额下限，如 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CHECK_DTL_MAX 每项校验保留明细行数",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CHECK_DTL_MAX\",\n  \"Name\": \"每项校验保留明细行数\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"200\",\n  \"U_DataType\": \"整数\",\n  \"U_Hint\": \"整数，如 200\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ACCT_CHECK_BUSITYPES PRE-25 核对科目的业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"ACCT_CHECK_BUSITYPES\",\n  \"Name\": \"PRE-25 核对科目的业务类型\",\n  \"U_Category\": \"尾差与校验\",\n  \"U_Value\": \"210\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"@U_CIOTRN.Code 逗号分隔，如 210\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "COST_TRANSCODES 成本模块生成的凭证代码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"COST_TRANSCODES\",\n  \"Name\": \"成本模块生成的凭证代码\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"MR01,MR02,YF01,PP01,WW01,IO01,IO02,PP04,PP05,WW03,DN01,DN02,DN03,DN04,AR03,AR04,JZ01,JZ03,JZ04,PUR1,PUR2,PUR3,PUR4,PUR5\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"凭证代码逗号分隔；要和代码实际生成的一致，不要随意增删\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JV_REV_TRANSCODES 凭单下月初自动冲销的凭证代码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"JV_REV_TRANSCODES\",\n  \"Name\": \"凭单下月初自动冲销的凭证代码\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"AR03,AR04\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"凭证代码逗号分隔，如 AR03,AR04\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RECON_BLOCK_ON 财务对账按哪列差额阻断",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"RECON_BLOCK_ON\",\n  \"Name\": \"财务对账按哪列差额阻断\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"CUR\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"CUR 本期差额（期初差额只列示）/ END 期末差额\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RECON_COSTONLY_AREAS 只比较成本凭证的对账项",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"RECON_COSTONLY_AREAS\",\n  \"Name\": \"只比较成本凭证的对账项\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"WIP_PROD,GOODS,WW_MAT\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP，逗号分隔\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUR2_REV_ACCTS PUR2 冲回发票凭证的科目",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"PUR2_REV_ACCTS\",\n  \"Name\": \"PUR2 冲回发票凭证的科目\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"1403,1405,1409,220202\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"科目或前 4 位，逗号分隔，如 1403,1405,1409,220202\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUR3_REV_ACCTS PUR3 冲回发票凭证的科目",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"PUR3_REV_ACCTS\",\n  \"Name\": \"PUR3 冲回发票凭证的科目\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"140802\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"科目或前 4 位，逗号分隔，如 140802\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TB_EXTRA_ACCTS 科目余额表额外列出的科目",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"TB_EXTRA_ACCTS\",\n  \"Name\": \"科目余额表额外列出的科目\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"科目或科目前缀，逗号分隔，可以为空，如 6602,1122\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SAMPLE_VAT_RATE 样品视同销售税率",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"SAMPLE_VAT_RATE\",\n  \"Name\": \"样品视同销售税率\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"0.13\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"小数，如 0.13\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SAMPLE_VAT_DIV 国内样品销项税除数",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"SAMPLE_VAT_DIV\",\n  \"Name\": \"国内样品销项税除数\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"1.13\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"销项税 = 数量 × 平台价 ÷ 本值 × 税率，如 1.13\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SAMPLE_EXPORT_FACTOR 国外样品销项税成本倍数",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"SAMPLE_EXPORT_FACTOR\",\n  \"Name\": \"国外样品销项税成本倍数\",\n  \"U_Category\": \"凭证与对账\",\n  \"U_Value\": \"1.5\",\n  \"U_DataType\": \"数字\",\n  \"U_Hint\": \"销项税 = 成本 × 本值 × 税率，如 1.5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "WW_WORTYPES 委外工单的订单类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"WW_WORTYPES\",\n  \"Name\": \"委外工单的订单类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"50\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"U_OrdType 逗号分隔，如 50；改了要同步改费用池分摊范围的订单类型\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "REWORK_WORTYPES 返工单的订单类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"REWORK_WORTYPES\",\n  \"Name\": \"返工单的订单类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"30\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"U_OrdType 逗号分隔，如 30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TRIAL_WORTYPES 试打订单的订单类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"TRIAL_WORTYPES\",\n  \"Name\": \"试打订单的订单类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"40\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"U_OrdType 逗号分隔，如 40\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "TRIAL_ISSUE_BUSITYPES 试打允许的领料业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"TRIAL_ISSUE_BUSITYPES\",\n  \"Name\": \"试打允许的领料业务类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"307,305\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"@U_CIOTRN.Code 逗号分隔，如 307,305\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CONV_IN_BUSITYPE 形态转换转入业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CONV_IN_BUSITYPE\",\n  \"Name\": \"形态转换转入业务类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"204\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"@U_CIOTRN.Code，如 204（I05）\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CONV_OUT_BUSITYPE 形态转换转出业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CONV_OUT_BUSITYPE\",\n  \"Name\": \"形态转换转出业务类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"205\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"@U_CIOTRN.Code，如 205（O05）\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RETURN_BUSITYPES 生产退料业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"RETURN_BUSITYPES\",\n  \"Name\": \"生产退料业务类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"304\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"@U_CIOTRN.Code 逗号分隔，如 304\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SAMPLE_SALTYPES 样品销售的业务类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"SAMPLE_SALTYPES\",\n  \"Name\": \"样品销售的业务类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"样品销售\",\n  \"U_DataType\": \"列表\",\n  \"U_Hint\": \"@MTC_SALORDTYPE.U_BusiType 逗号分隔，如 样品销售\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CUST_DOM 国内客户的客户类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CUST_DOM\",\n  \"Name\": \"国内客户的客户类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"国内客户\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"@MTC_SALORDTYPE.U_CustType，如 国内客户\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CUST_EXP 国外客户的客户类型",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/MTC_CA_PARAM",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Code\": \"CUST_EXP\",\n  \"Name\": \"国外客户的客户类型\",\n  \"U_Category\": \"业务口径\",\n  \"U_Value\": \"国外客户\",\n  \"U_DataType\": \"文字\",\n  \"U_Hint\": \"@MTC_SALORDTYPE.U_CustType，如 国外客户\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9 登出",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/Logout"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('成功（201 新建 / 200 / 204）', () => pm.expect(pm.response.code).to.be.oneOf([200,201,204]));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

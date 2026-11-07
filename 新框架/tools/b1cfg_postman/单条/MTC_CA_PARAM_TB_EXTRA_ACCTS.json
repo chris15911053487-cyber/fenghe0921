@@ -1,0 +1,8 @@
+{
+  "Code": "TB_EXTRA_ACCTS",
+  "Name": "科目余额表额外列出的科目",
+  "U_Category": "凭证与对账",
+  "U_Value": "",
+  "U_DataType": "列表",
+  "U_Hint": "科目或科目前缀，逗号分隔，可以为空，如 6602,1122"
+}

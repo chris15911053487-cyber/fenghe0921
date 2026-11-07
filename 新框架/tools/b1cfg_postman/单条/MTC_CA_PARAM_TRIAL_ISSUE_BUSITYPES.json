@@ -1,0 +1,8 @@
+{
+  "Code": "TRIAL_ISSUE_BUSITYPES",
+  "Name": "试打允许的领料业务类型",
+  "U_Category": "业务口径",
+  "U_Value": "307,305",
+  "U_DataType": "列表",
+  "U_Hint": "@U_CIOTRN.Code 逗号分隔，如 307,305"
+}

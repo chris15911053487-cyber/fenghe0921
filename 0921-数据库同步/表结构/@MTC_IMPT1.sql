@@ -1,0 +1,20 @@
+CREATE COLUMN TABLE "FH100"."@MTC_IMPT1" (
+    "DocEntry" INTEGER NOT NULL,
+    "LineId" INTEGER NOT NULL,
+    "VisOrder" INTEGER,
+    "Object" NVARCHAR(20),
+    "LogInst" INTEGER,
+    "U_Text1" NVARCHAR(254),
+    "U_Text2" NVARCHAR(254),
+    "U_Text3" NVARCHAR(254),
+    "U_Ntext" NCLOB,
+    "U_Text4" NVARCHAR(254),
+    "U_Text5" NVARCHAR(254),
+    "U_Date1" TIMESTAMP,
+    "U_Date2" TIMESTAMP,
+    "U_Flag" NVARCHAR(10),
+    "U_Dec1" DECIMAL(21,6) DEFAULT 0.0,
+    "U_Dec2" DECIMAL(21,6) DEFAULT 0.0,
+    "U_Dec3" DECIMAL(21,6) DEFAULT 0.0,
+    PRIMARY KEY ("DocEntry", "LineId")
+)

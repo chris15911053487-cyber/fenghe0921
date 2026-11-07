@@ -1,0 +1,7 @@
+CREATE COLUMN TABLE "FH100"."MTC_COST_0101_COSTTYPE" (
+    "CostTypeCode" NVARCHAR(50),
+    "CostTypeName" NVARCHAR(100),
+    "IsMain" NVARCHAR(50),
+    "CreateDate" NVARCHAR(50),
+    "Creator" NVARCHAR(50)
+)

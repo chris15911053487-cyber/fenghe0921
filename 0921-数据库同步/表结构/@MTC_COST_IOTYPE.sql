@@ -1,0 +1,7 @@
+CREATE COLUMN TABLE "FH100"."@MTC_COST_IOTYPE" (
+    "Code" NVARCHAR(50) NOT NULL,
+    "Name" NVARCHAR(100) NOT NULL,
+    "U_IOType" NVARCHAR(10),
+    "U_TransCode" NVARCHAR(10),
+    PRIMARY KEY ("Code")
+)

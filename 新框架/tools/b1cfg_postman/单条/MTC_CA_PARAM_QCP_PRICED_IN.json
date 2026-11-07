@@ -1,0 +1,8 @@
+{
+  "Code": "QCP_PRICED_IN",
+  "Name": "PRE-23 价格来源入库类型",
+  "U_Category": "计算控制",
+  "U_Value": "I01,I03,I05,I07,I08,I09,I90",
+  "U_DataType": "列表",
+  "U_Hint": "交易类型逗号分隔，如 I01,I03,I05,I07,I08,I09,I90"
+}

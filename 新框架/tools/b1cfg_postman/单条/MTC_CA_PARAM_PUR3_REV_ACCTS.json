@@ -1,0 +1,8 @@
+{
+  "Code": "PUR3_REV_ACCTS",
+  "Name": "PUR3 冲回发票凭证的科目",
+  "U_Category": "凭证与对账",
+  "U_Value": "140802",
+  "U_DataType": "列表",
+  "U_Hint": "科目或前 4 位，逗号分隔，如 140802"
+}

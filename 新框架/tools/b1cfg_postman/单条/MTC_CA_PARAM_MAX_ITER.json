@@ -1,0 +1,8 @@
+{
+  "Code": "MAX_ITER",
+  "Name": "最大迭代轮数",
+  "U_Category": "计算控制",
+  "U_Value": "50",
+  "U_DataType": "整数",
+  "U_Hint": "整数，超过仍不收敛则不写结果，如 50"
+}

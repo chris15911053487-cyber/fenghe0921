@@ -1,0 +1,4 @@
+-- 2026-10-15 补丁：发出商品 140601 期末 = 期初 = 0（用户 2026-10-15）。财务对账的业务端改为 0、财务端含 AR03 / AR04 和 B1 自动冲销；
+-- MTC_CA_F_RECON_LEDGER 加 Part（① 冲销上月计提 ② 发货 ③ 样品 ④ 发票 ⑤ 本月计提）；POST-10 列出构成并核对 ① = 上期末未开票、⑤ = 本期末未开票；
+-- MTC_CA_F_TB_LINE 加 RevOf（冲销的原凭证代码）。已部署的库依次执行：本文件（检查项说明），16_p70_jdt.sql；执行台更新 actions.json / index.html
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-10', 'POST', 200, '发出商品对账', '140601 期末 = 期初 = 0（用户 2026-10-15）：月末 AR03 / AR04 把未开票部分全部计提，下月初 B1 自动冲销，所以业务端期初、期末都是 0，财务端含全部分录。本期构成：① 冲销上月计提（OJDT.StornoToTr 指向 AR03 / AR04）② 发货 DN01 ③ 样品转出 DN02 / DN04 ④ 发票 DN03 ⑤ 本月计提 AR03 / AR04，合计应为 0；另核对 ① = 上期末未开票（R_GOODS_OUT_BEG）、⑤ = 本期末未开票（R_GOODS_OUT），不一致单独列出（如旧框架按当前未清数量计提的上月金额）。差额 = 总账已过账 + 未清凭单 + 底稿中本期尚未过账的凭证 − 0', 'Y', 'S12') WITH PRIMARY KEY

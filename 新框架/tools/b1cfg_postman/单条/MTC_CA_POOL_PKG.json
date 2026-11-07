@@ -1,0 +1,21 @@
+{
+  "Code": "PKG",
+  "Name": "包装车间",
+  "U_IsDefault": "N",
+  "U_IsCloseDif": "N",
+  "U_Descr": "旧 0312：成本中心 P017 的费用",
+  "MTC_CA_POOL1Collection": [
+    {
+      "U_OcrCode": "P017",
+      "U_Descr": "OPRC.U_CalType = P017 的成本中心都进包装车间（也可以直接填成本中心代码）"
+    }
+  ],
+  "MTC_CA_POOL2Collection": [
+    {
+      "U_MatchBy": "GRPTYPE",
+      "U_MatchVal": "A",
+      "U_WorTypes": "10,20,30,40",
+      "U_Descr": "车间类别 A 包装（旧 0312 物料组 101）"
+    }
+  ]
+}

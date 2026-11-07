@@ -1,0 +1,33 @@
+# 连接文件（含密码）：不要读出、发布或打包
+mtc_ca_conn.json
+sl_conn.json
+*_conn.json
+tools/console/server.json
+.env*
+# 业务数据、脱敏导出、密钥对照表（CLAUDE.md 数据边界）
+排查数据/
+脱敏密钥/
+**/主数据/
+*.xlsx
+*.xls
+*.csv
+# 日志、审计
+tools/console/logs/
+tools/console/audit/
+部署包/执行台服务器/console/logs/
+*.log
+*.jsonl
+# 导出包、打包产物
+*.zip
+部署包/执行台服务器/
+# 系统和编辑器
+.DS_Store
+.~*
+~$*
+__pycache__/
+*.pyc
+.claude/
+# 带科目余额（CurrTotal / EndTotal）
+科目表_OACT.txt
+# 主数据导出（物料、BOM、业务伙伴等）
+新框架/基础数据/导出/

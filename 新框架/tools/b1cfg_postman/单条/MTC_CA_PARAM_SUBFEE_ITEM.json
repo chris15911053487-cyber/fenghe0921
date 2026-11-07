@@ -1,0 +1,8 @@
+{
+  "Code": "SUBFEE_ITEM",
+  "Name": "委外加工费物料",
+  "U_Category": "费用归集",
+  "U_Value": "X0510001",
+  "U_DataType": "文字",
+  "U_Hint": "物料代码，如 X0510001"
+}

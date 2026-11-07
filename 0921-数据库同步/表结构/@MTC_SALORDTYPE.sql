@@ -1,0 +1,23 @@
+CREATE COLUMN TABLE "FH100"."@MTC_SALORDTYPE" (
+    "Code" NVARCHAR(50) NOT NULL,
+    "Name" NVARCHAR(100),
+    "DocEntry" INTEGER NOT NULL,
+    "Canceled" NVARCHAR(1) DEFAULT N,
+    "Object" NVARCHAR(20),
+    "LogInst" INTEGER,
+    "UserSign" INTEGER,
+    "Transfered" NVARCHAR(1) DEFAULT N,
+    "CreateDate" TIMESTAMP,
+    "CreateTime" SMALLINT,
+    "UpdateDate" TIMESTAMP,
+    "UpdateTime" SMALLINT,
+    "DataSource" NVARCHAR(1),
+    "U_Pack" NVARCHAR(20),
+    "U_COC" NVARCHAR(20),
+    "U_ColorBox" NVARCHAR(100),
+    "U_Carton" NVARCHAR(100),
+    "U_CustType" NVARCHAR(10) DEFAULT - NOT NULL,
+    "U_BusiType" NVARCHAR(10) DEFAULT - NOT NULL,
+    "U_SamUSE" NVARCHAR(10),
+    PRIMARY KEY ("Code")
+)

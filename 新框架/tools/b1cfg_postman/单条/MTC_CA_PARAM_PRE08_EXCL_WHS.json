@@ -1,0 +1,8 @@
+{
+  "Code": "PRE08_EXCL_WHS",
+  "Name": "PRE-08 不报的不计价仓库",
+  "U_Category": "尾差与校验",
+  "U_Value": "",
+  "U_DataType": "列表",
+  "U_Hint": "仓库代码逗号分隔，可以为空，如 S300,WX01"
+}

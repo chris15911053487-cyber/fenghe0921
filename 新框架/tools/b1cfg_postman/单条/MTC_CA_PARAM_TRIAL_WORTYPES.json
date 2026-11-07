@@ -1,0 +1,8 @@
+{
+  "Code": "TRIAL_WORTYPES",
+  "Name": "试打订单的订单类型",
+  "U_Category": "业务口径",
+  "U_Value": "40",
+  "U_DataType": "列表",
+  "U_Hint": "U_OrdType 逗号分隔，如 40"
+}

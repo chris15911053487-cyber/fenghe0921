@@ -1,0 +1,23 @@
+对象	状态	必须	说明
+@MTC_CA_POOL	新建	是	费用池 UDO 表头（B1自定义表_费用配置.md 第 1 节）
+@MTC_CA_POOL1	新建	是	费用池-成本中心
+@MTC_CA_POOL2	新建	是	费用池-分摊范围
+@MTC_CA_PARAM	新建	是	计算参数 UDO（第 2 节）
+@MTC_CA_PARAM.U_Locked	新建	否	参数锁定 Y / N（2026-10-29）
+@MTC_CA_EXPSET	作废	-	旧参数表，已被 @MTC_CA_PARAM 取代，P05 只在没有新表数据时回退读取
+@MTC_CA_EXPSET1	作废	-	同上
+OPRC.U_CalType	新建	是	成本中心的成本计入类型，按它归池（第 1 节）；没有时 20_b1cfg_check.sql 编译不过
+OUSR.U_MTC_CARole	新建	否	执行台服务器模式登录权限（第 3 节）；dev_server.py 里拼的 SQL，扫描不到，手工登记
+OJDT.U_MTC_CARunId	新建	否	生成凭单时写运行号（设计稿 8.6）；dev_server.py 里拼的 SQL，扫描不到，手工登记
+@U_CITRN1.U_AcctCode	已有	-	库存交易事务配置（用户插件的表，PRE-25 用，用户 2026-10-15）
+@U_CITRN1.U_CtrCode	已有	-	同上
+@U_CITRN1.U_ItmGrpCod	已有	-	同上
+BTF1.U_VendorCode	已有	-	JDT1.U_VendorCode 的同一个字段，B1 自动带到凭单行
+@MTC_OWOR.U_OWORNum	误报	-	srcsql/subfee.sql 里别名 R 先后指 RPD1 和 @MTC_OWOR，实际是 RPD1.U_OWORNum
+@U_CITRN1	已有	-	库存交易事务配置表（用户插件的表）
+OITM.U_KeyItem	已有	否	执行台“生成 B1 单据”写期初单价维护的关键物料（旧 CAL_1001_CHECK 同样取它）；dev_server.py 里拼的 SQL，扫描不到，手工登记（2026-10-29）
+@MTC_COST_QCPRICE1.U_ItmsGrpNam	已有	否	执行台“生成 B1 单据”写期初单价维护行（物料组名称、关键物料 U_U_KeyItem、层级 U_iLevel、备注 U_LineMemo）；dev_server.py，手工登记（2026-10-29）
+@MTC_COST_TIME1.U_Memo	已有	否	执行台“生成 B1 单据”写生产工时行备注；dev_server.py，手工登记（2026-10-29）
+@MTC_OWOR.U_InitPrice	误报	否	subfee.sql 别名 R / D 在不同段指 PDN1 / RPD1，扫描器按别名误认（2026-10-30）
+@MTC_OWOR.U_IsPrice	误报	否	同上
+IGN1.U_IsPrice	误报	否	同上

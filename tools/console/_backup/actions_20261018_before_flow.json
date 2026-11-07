@@ -1,0 +1,736 @@
+{
+  "_说明": "成本执行台允许执行的全部操作（白名单）。服务只执行这里登记的语句；参数按 params 的顺序绑定到 ?，先用 validators 校验格式。kind=query 在只读事务中执行并回滚；kind=call 是后台长操作（计算、检查、承接，只写 MTC_CA_*），同一时间只允许一个；kind=exec 是同步的小写操作（维护模拟场景，只写 MTC_CA_C_SCENARIO*），执行后提交。confirm=always / runTypeF 表示需要输入账套名确认。改动后两个服务（cost_console.ps1、dev_server.py）都会读到。",
+  "validators": {
+    "runId": "^\\d{1,18}$",
+    "fc": "^\\d{4}-\\d{2}$",
+    "runType": "^[FS]$",
+    "scenario": "^[A-Za-z0-9_\\-]{0,30}$",
+    "checkId": "^[A-Z]{2,5}-\\d{2}$",
+    "kind": "^[A-Za-z0-9_\\-]{1,30}$",
+    "q": "^[A-Za-z0-9_\\.\\-/]{0,50}$",
+    "transCode": "^[A-Za-z0-9]{2,10}$",
+    "user": "^[^\\x00-\\x1f]{1,50}$",
+    "orderType": "^(202|MTC_OWOR)$",
+    "orderEntry": "^\\d{1,10}$",
+    "poolCode": "^[A-Za-z0-9_\\-]{1,20}$",
+    "elem": "^(MFG|LAB)$",
+    "itemCode": "^[^\\x00-\\x1f]{1,50}$",
+    "runId2": "^\\d{1,18}$",
+    "text": "^[^\\x00-\\x1f]{0,100}$",
+    "title": "^[^\\x00-\\x1f]{1,100}$",
+    "descr": "^[^\\x00-\\x1f]{0,500}$",
+    "scenCode": "^[A-Za-z0-9_\\-]{1,30}$",
+    "lineNo": "^\\d{1,6}$",
+    "ovrType": "^(ITEM_PRICE_PCT|POOL_PCT|HOURS_PCT)$",
+    "keyCode": "^[^\\x00-\\x1f]{0,100}$",
+    "pct": "^-?\\d{1,5}(\\.\\d{1,6})?$",
+    "tableName": "^(MTC_CA_[A-Z0-9_]{1,60}|@[A-Za-z0-9_]{1,30})$",
+    "acct": "^[A-Za-z0-9\\-]{1,15}$",
+    "pool0": "^[A-Za-z0-9_\\-]{0,20}$",
+    "transId": "^\\d{1,10}$"
+  },
+  "actions": {
+    "ping": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT CURRENT_USER AS \"User\", CURRENT_SCHEMA AS \"Schema\", (SELECT DATABASE_NAME FROM SYS.M_DATABASE) AS \"Db\", (SELECT COUNT(*) FROM SYS.OBJECTS WHERE SCHEMA_NAME = CURRENT_SCHEMA AND OBJECT_NAME = 'MTC_CA_P_RUN') AS \"HasNew\" FROM DUMMY"
+    },
+    "codeDict": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT 'TRANS' AS \"Dict\", \"Code\", \"Name\" FROM \"@MTC_COST_IOTYPE\" UNION ALL SELECT 'TRANS', \"TrnsCode\", \"TrnsCodDsc\" FROM \"OTRC\" UNION ALL SELECT 'BUSI', \"Code\", \"Name\" FROM \"@U_CIOTRN\" UNION ALL SELECT 'RULE', \"RuleId\", \"Title\" FROM \"MTC_CA_C_RULE\" UNION ALL SELECT 'CHECK', \"CheckId\", \"Title\" FROM \"MTC_CA_C_CHECK\" UNION ALL SELECT 'POOL', \"PoolCode\", \"PoolName\" FROM \"MTC_CA_C_POOL\" UNION ALL SELECT 'ACCT', \"AcctCode\", \"AcctName\" FROM \"OACT\" UNION ALL SELECT 'ACCT', \"FormatCode\", \"AcctName\" FROM \"OACT\" WHERE IFNULL(\"FormatCode\", '') <> '' AND \"FormatCode\" <> \"AcctCode\""
+    },
+    "periods": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TOP 36 \"Code\", \"PeriodStat\" FROM OFPR ORDER BY \"Code\" DESC"
+    },
+    "scenarios": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"Scenario\", \"Title\", \"Descr\" FROM \"MTC_CA_C_SCENARIO\" ORDER BY \"Scenario\""
+    },
+    "boot": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT B.\"Fc\" AS \"BootFc\", (SELECT COUNT(*) FROM \"MTC_CA_BOOT_ITEM\" WHERE \"FcCode\" = B.\"Fc\") AS \"Items\", (SELECT COUNT(*) FROM \"MTC_CA_BOOT_ORDER\" WHERE \"FcCode\" = B.\"Fc\") AS \"Orders\", (SELECT MAX(\"LoadTime\") FROM \"MTC_CA_BOOT_ITEM\" WHERE \"FcCode\" = B.\"Fc\") AS \"LoadTime\" FROM (SELECT \"MTC_CA_F_PARAM\"('BOOTSTRAP_FC', TO_NVARCHAR(CURRENT_DATE, 'YYYY-MM')) AS \"Fc\" FROM DUMMY) B"
+    },
+    "runs": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TOP 100 \"RunId\", \"FcCode\", \"RunType\", \"Scenario\", \"Initiator\", \"UserCode\", \"StartTime\", \"EndTime\", \"Status\", \"IterCount\", \"Converged\", \"Msg\" FROM \"MTC_CA_RUN\" ORDER BY \"RunId\" DESC"
+    },
+    "steps": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"StepNo\", \"StepCode\", \"Status\", \"RowCnt\", \"Msg\", \"StartTime\", \"EndTime\", SECONDS_BETWEEN(\"StartTime\", IFNULL(\"EndTime\", CURRENT_TIMESTAMP)) AS \"Sec\" FROM \"MTC_CA_RUN_STEP\" WHERE \"RunId\" = CAST(? AS BIGINT) ORDER BY \"StepNo\""
+    },
+    "iters": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"Iter\", \"MaxPriceDelta\", \"PoolDelta\", \"CloseDifDelta\", \"UnconvItems\", \"EndTime\" FROM \"MTC_CA_RUN_ITER\" WHERE \"RunId\" = CAST(? AS BIGINT) ORDER BY \"Iter\""
+    },
+    "checks": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT R.\"CheckId\", R.\"Stage\", IFNULL(C.\"Title\", '') AS \"Title\", R.\"Result\", R.\"IssueCnt\", R.\"IsBlock\", R.\"Msg\", IFNULL(C.\"Purpose\", '') AS \"Purpose\", IFNULL(C.\"TroublePath\", '') AS \"TroublePath\" FROM \"MTC_CA_R_CHECK\" R LEFT JOIN \"MTC_CA_C_CHECK\" C ON C.\"CheckId\" = R.\"CheckId\" WHERE R.\"RunId\" = CAST(? AS BIGINT) ORDER BY CASE R.\"Stage\" WHEN 'PRE' THEN 1 ELSE 2 END, IFNULL(C.\"SortNo\", 9999), R.\"CheckId\""
+    },
+    "checkDtl": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "checkId"
+      ],
+      "sql": "SELECT \"SeqNo\", \"KeyCode\", \"Info\" FROM \"MTC_CA_R_CHECK_DTL\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"CheckId\" = ? ORDER BY \"SeqNo\""
+    },
+    "qcpNeed": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"ItemCode\", \"ItemName\", \"ItmsGrpCod\", \"iLevel\", \"FirstSeen\", \"LastFc\", \"NeedTrans\", \"NeedQty\", \"SuggPrice\", \"SuggSrc\", \"SuggFc\" FROM \"MTC_CA_R_QCP_NEED\" WHERE \"RunId\" = CAST(? AS BIGINT) AND (? = '' OR \"ItemCode\" LIKE ? || '%' OR \"ItmsGrpCod\" = ?) ORDER BY \"FirstSeen\" DESC, \"ItmsGrpCod\", \"ItemCode\""
+    },
+    "qcpNeedSum": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT COUNT(*) AS \"Cnt\", SUM(CASE WHEN \"FirstSeen\" = 'Y' THEN 1 ELSE 0 END) AS \"FirstCnt\", SUM(CASE WHEN \"SuggPrice\" IS NULL THEN 1 ELSE 0 END) AS \"NoSugg\" FROM \"MTC_CA_R_QCP_NEED\" WHERE \"RunId\" = CAST(? AS BIGINT)"
+    },
+    "reconStatus": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"Basis\", \"DraftCodes\", \"PostedCodes\", \"VchCodes\" FROM \"MTC_CA_F_RECON_STATUS\"(CAST(? AS BIGINT))"
+    },
+    "recon": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"Area\", \"AcctCode\", \"KeyCode\", \"BegBiz\", \"BegFin\", \"BegDiff\", \"CurBiz\", \"CurFin\", \"CurDiff\", \"BizAmt\" AS \"EndBiz\", \"EndFin\", \"Diff\" AS \"EndDiff\", \"OtherAmt\", \"Diff\" + \"OtherAmt\" AS \"EndDiffGl\", CASE WHEN ABS(\"Diff\" - \"BegDiff\") <= 0.01 THEN 'Y' ELSE 'N' END AS \"EndEqBeg\", \"DraftAmt\" - \"DupAmt\" AS \"PendAmt\", \"PendCodes\", \"DupAmt\", \"DupCodes\", \"GlAmt\", \"VchAmt\", \"Diff1\", \"Diff2\" FROM \"MTC_CA_F_RECON\"(CAST(? AS BIGINT)) ORDER BY CASE \"Area\" WHEN 'STOCK' THEN 1 WHEN 'WIP_PROD' THEN 2 WHEN 'WW_MAT' THEN 3 WHEN 'WW_FEE' THEN 4 WHEN 'GOODS' THEN 5 ELSE 6 END, \"AcctCode\", ABS(\"CurDiff\") DESC, ABS(\"Diff\") DESC, \"KeyCode\""
+    },
+    "reconSrc": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "acct",
+        "keyCode"
+      ],
+      "sql": "SELECT CASE R.\"Phase\" WHEN 'BEG' THEN '期初' ELSE '本期' END AS \"Phase\", R.\"Src\", R.\"TransCode\", C.\"TrnsCodDsc\" AS \"TransName\", R.\"InRecon\", R.\"Dup\", R.\"Part\", R.\"Amt\" FROM \"MTC_CA_F_RECON_LEDGER\"(CAST(? AS BIGINT)) R LEFT JOIN \"OTRC\" C ON C.\"TrnsCode\" = R.\"TransCode\" WHERE R.\"AcctCode\" = ? AND R.\"KeyCode\" = ? ORDER BY R.\"Phase\", CASE R.\"Part\" WHEN 'REV' THEN 1 WHEN 'DN01' THEN 2 WHEN 'SAMPLE' THEN 3 WHEN 'DN03' THEN 4 WHEN 'ACCR' THEN 5 ELSE 6 END, CASE R.\"Src\" WHEN 'GL' THEN 1 WHEN 'VCH' THEN 2 ELSE 3 END, R.\"TransCode\""
+    },
+    "checkSql": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT 'P' AS \"Kind\", PROCEDURE_NAME AS \"ProcName\", DEFINITION AS \"Def\" FROM SYS.PROCEDURES WHERE SCHEMA_NAME = CURRENT_SCHEMA AND PROCEDURE_NAME LIKE 'MTC_CA_%' UNION ALL SELECT 'V', VIEW_NAME, DEFINITION FROM SYS.VIEWS WHERE SCHEMA_NAME = CURRENT_SCHEMA AND VIEW_NAME LIKE 'MTC_CA_%'"
+    },
+    "cmpSummary": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"Kind\", COUNT(*) AS \"Cnt\", SUM(ABS(\"Diff\")) AS \"AbsDiff\", SUM(CASE WHEN IFNULL(\"Reason\", '') = '' THEN 1 ELSE 0 END) AS \"NoReason\" FROM \"MTC_CA_R_CMP\" WHERE \"RunId\" = CAST(? AS BIGINT) GROUP BY \"Kind\" ORDER BY \"Kind\""
+    },
+    "cmpList": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "kind",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 C.\"KeyCode\", S.\"OrderNum\", C.\"NewVal\", C.\"OldVal\", C.\"Diff\", C.\"Reason\", C.\"Note\" FROM \"MTC_CA_R_CMP\" C LEFT JOIN \"MTC_CA_S_ORDER\" S ON C.\"Kind\" LIKE 'ORDER%' AND S.\"RunId\" = C.\"RunId\" AND S.\"OrderType\" || '-' || TO_NVARCHAR(S.\"OrderEntry\") = C.\"KeyCode\" WHERE C.\"RunId\" = CAST(? AS BIGINT) AND C.\"Kind\" = ? AND (? = '' OR C.\"KeyCode\" LIKE ? || '%' OR S.\"OrderNum\" = ?) ORDER BY ABS(C.\"Diff\") DESC"
+    },
+    "items": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"ItemCode\", \"iLevel\", \"PriceSrc\", \"PMat\" + \"PMfg\" + \"PLab\" + \"PSub\" AS \"Price\", \"PMat\", \"PMfg\", \"PLab\", \"PSub\", \"OpenQty\", \"InQty\", \"OutQty\", \"EndQty\", \"EndAmount\", \"Flags\" FROM \"MTC_CA_R_ITEM\" WHERE \"RunId\" = CAST(? AS BIGINT) AND (? = '' OR \"ItemCode\" LIKE ? || '%') ORDER BY \"iLevel\", \"ItemCode\""
+    },
+    "invSum": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"ItmsGrpCod\", \"GrpName\", \"ItemCode\", \"ItemName\", \"BegQty\", \"BegAmt\" / NULLIF(\"BegQty\", 0) AS \"BegPrice\", \"BegAmt\", \"BegMat\", \"BegMfg\", \"BegLab\", \"BegSub\", \"InQty\", \"InAmt\" / NULLIF(\"InQty\", 0) AS \"InPrice\", \"InAmt\", \"InMat\", \"InMfg\", \"InLab\", \"InSub\", \"OutQty\", \"OutAmt\" / NULLIF(\"OutQty\", 0) AS \"OutPrice\", \"OutAmt\", \"OutMat\", \"OutMfg\", \"OutLab\", \"OutSub\", \"EndQty\", \"EndAmt\" / NULLIF(\"EndQty\", 0) AS \"EndPrice\", \"EndAmt\", \"EndMat\", \"EndMfg\", \"EndLab\", \"EndSub\", \"RtBegMat\", \"RtBegLab\", \"RtBegMfg\", \"RtBegSub\", \"RtInMat\", \"RtInLab\", \"RtInMfg\", \"RtInSub\", \"RtOutMat\", \"RtOutLab\", \"RtOutMfg\", \"RtOutSub\", \"RtEndMat\", \"RtEndLab\", \"RtEndMfg\", \"RtEndSub\" FROM (SELECT IFNULL(S.\"ItmsGrpCod\", '') AS \"ItmsGrpCod\", G.\"ItmsGrpNam\" AS \"GrpName\", R.\"ItemCode\", S.\"ItemName\", R.\"OpenQty\" AS \"BegQty\", R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" AS \"BegAmt\", R.\"InQty\", R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\" AS \"InAmt\", -R.\"OutQty\" AS \"OutQty\", -(R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\") AS \"OutAmt\", R.\"EndQty\", R.\"EndAmount\" AS \"EndAmt\", R.\"OpenMat\" AS \"BegMat\", R.\"OpenMfg\" AS \"BegMfg\", R.\"OpenLab\" AS \"BegLab\", R.\"OpenSub\" AS \"BegSub\", R.\"InMat\" AS \"InMat\", R.\"InMfg\" AS \"InMfg\", R.\"InLab\" AS \"InLab\", R.\"InSub\" AS \"InSub\", -R.\"OutMat\" AS \"OutMat\", -R.\"OutMfg\" AS \"OutMfg\", -R.\"OutLab\" AS \"OutLab\", -R.\"OutSub\" AS \"OutSub\", R.\"EndMat\" AS \"EndMat\", R.\"EndMfg\" AS \"EndMfg\", R.\"EndLab\" AS \"EndLab\", R.\"EndSub\" AS \"EndSub\", R.\"RtOpenMat\" AS \"RtBegMat\", R.\"RtOpenLab\" AS \"RtBegLab\", R.\"RtOpenMfg\" AS \"RtBegMfg\", R.\"RtOpenSub\" AS \"RtBegSub\", R.\"RtInMat\" AS \"RtInMat\", R.\"RtInLab\" AS \"RtInLab\", R.\"RtInMfg\" AS \"RtInMfg\", R.\"RtInSub\" AS \"RtInSub\", R.\"RtOutMat\" AS \"RtOutMat\", R.\"RtOutLab\" AS \"RtOutLab\", R.\"RtOutMfg\" AS \"RtOutMfg\", R.\"RtOutSub\" AS \"RtOutSub\", R.\"RtEndMat\" AS \"RtEndMat\", R.\"RtEndLab\" AS \"RtEndLab\", R.\"RtEndMfg\" AS \"RtEndMfg\", R.\"RtEndSub\" AS \"RtEndSub\" FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" LEFT JOIN \"OITB\" G ON TO_NVARCHAR(G.\"ItmsGrpCod\") = S.\"ItmsGrpCod\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND (? = '' OR R.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?) AND (R.\"OpenQty\" <> 0 OR R.\"InQty\" <> 0 OR R.\"OutQty\" <> 0 OR R.\"EndQty\" <> 0 OR R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" <> 0 OR R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\" <> 0 OR R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\" <> 0 OR R.\"EndAmount\" <> 0)) X ORDER BY LPAD(\"ItmsGrpCod\", 10, '0'), \"ItemCode\""
+    },
+    "invGrp": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT \"ItmsGrpCod\", MAX(\"GrpName\") AS \"GrpName\", COUNT(*) AS \"ItemCnt\", SUM(\"BegQty\") AS \"BegQty\", SUM(\"BegAmt\") AS \"BegAmt\", SUM(\"BegMat\") AS \"BegMat\", SUM(\"BegMfg\") AS \"BegMfg\", SUM(\"BegLab\") AS \"BegLab\", SUM(\"BegSub\") AS \"BegSub\", SUM(\"InQty\") AS \"InQty\", SUM(\"InAmt\") AS \"InAmt\", SUM(\"InMat\") AS \"InMat\", SUM(\"InMfg\") AS \"InMfg\", SUM(\"InLab\") AS \"InLab\", SUM(\"InSub\") AS \"InSub\", SUM(\"OutQty\") AS \"OutQty\", SUM(\"OutAmt\") AS \"OutAmt\", SUM(\"OutMat\") AS \"OutMat\", SUM(\"OutMfg\") AS \"OutMfg\", SUM(\"OutLab\") AS \"OutLab\", SUM(\"OutSub\") AS \"OutSub\", SUM(\"EndQty\") AS \"EndQty\", SUM(\"EndAmt\") AS \"EndAmt\", SUM(\"EndMat\") AS \"EndMat\", SUM(\"EndMfg\") AS \"EndMfg\", SUM(\"EndLab\") AS \"EndLab\", SUM(\"EndSub\") AS \"EndSub\" FROM (SELECT IFNULL(S.\"ItmsGrpCod\", '') AS \"ItmsGrpCod\", G.\"ItmsGrpNam\" AS \"GrpName\", R.\"ItemCode\", S.\"ItemName\", R.\"OpenQty\" AS \"BegQty\", R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" AS \"BegAmt\", R.\"InQty\", R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\" AS \"InAmt\", -R.\"OutQty\" AS \"OutQty\", -(R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\") AS \"OutAmt\", R.\"EndQty\", R.\"EndAmount\" AS \"EndAmt\", R.\"OpenMat\" AS \"BegMat\", R.\"OpenMfg\" AS \"BegMfg\", R.\"OpenLab\" AS \"BegLab\", R.\"OpenSub\" AS \"BegSub\", R.\"InMat\" AS \"InMat\", R.\"InMfg\" AS \"InMfg\", R.\"InLab\" AS \"InLab\", R.\"InSub\" AS \"InSub\", -R.\"OutMat\" AS \"OutMat\", -R.\"OutMfg\" AS \"OutMfg\", -R.\"OutLab\" AS \"OutLab\", -R.\"OutSub\" AS \"OutSub\", R.\"EndMat\" AS \"EndMat\", R.\"EndMfg\" AS \"EndMfg\", R.\"EndLab\" AS \"EndLab\", R.\"EndSub\" AS \"EndSub\" FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" LEFT JOIN \"OITB\" G ON TO_NVARCHAR(G.\"ItmsGrpCod\") = S.\"ItmsGrpCod\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND (? = '' OR R.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?) AND (R.\"OpenQty\" <> 0 OR R.\"InQty\" <> 0 OR R.\"OutQty\" <> 0 OR R.\"EndQty\" <> 0 OR R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" <> 0 OR R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\" <> 0 OR R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\" <> 0 OR R.\"EndAmount\" <> 0)) X GROUP BY \"ItmsGrpCod\" ORDER BY LPAD(\"ItmsGrpCod\", 10, '0')"
+    },
+    "invLedger": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q",
+        "runId",
+        "q",
+        "q",
+        "q",
+        "runId",
+        "q",
+        "q",
+        "q",
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"ItemCode\", \"ItemName\", \"Seq\", \"DocDate\", \"ObjType\", \"DocNum\", \"LineNum\", \"TransCode\", \"TransName\", \"BusiType\", \"WhsCode\", \"OrderType\", \"OrderEntry\", \"OrderNum\", \"InQty\", \"InAmt\" / NULLIF(\"InQty\", 0) AS \"InPrice\", \"InAmt\", \"OutQty\", \"OutAmt\" / NULLIF(\"OutQty\", 0) AS \"OutPrice\", \"OutAmt\", \"BalQty\", \"BalAmt\" / NULLIF(\"BalQty\", 0) AS \"BalPrice\", \"BalAmt\", \"PriceSrc\" FROM (SELECT R.\"ItemCode\", S.\"ItemName\", 0 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '期初结存' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", CAST(NULL AS DECIMAL(19,6)) AS \"InQty\", CAST(NULL AS DECIMAL(19,6)) AS \"InAmt\", CAST(NULL AS DECIMAL(19,6)) AS \"OutQty\", CAST(NULL AS DECIMAL(19,6)) AS \"OutAmt\", R.\"OpenQty\" AS \"BalQty\", R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" AS \"BalAmt\", CAST(NULL AS NVARCHAR(200)) AS \"PriceSrc\" FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND (? <> '' AND (R.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?)) AND EXISTS (SELECT 1 FROM \"MTC_CA_R_LINE\" L WHERE L.\"RunId\" = R.\"RunId\" AND L.\"ItemCode\" = R.\"ItemCode\") UNION ALL SELECT L.\"ItemCode\", S.\"ItemName\", 1, L.\"LineId\", D.\"DocDate\", D.\"ObjType\", D.\"DocNum\", D.\"LineNum\", L.\"TransCode\", T.\"Name\", D.\"BusiType\", D.\"WhsCode\", L.\"OrderType\", L.\"OrderEntry\", SO.\"OrderNum\", CASE WHEN (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN L.\"Qty\" END, CASE WHEN (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN L.\"Amount\" END, CASE WHEN NOT (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN -L.\"Qty\" END, CASE WHEN NOT (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN -L.\"Amount\" END, R.\"OpenQty\" + SUM(L.\"Qty\") OVER (PARTITION BY L.\"ItemCode\" ORDER BY D.\"DocDate\", L.\"LineId\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" + SUM(L.\"Amount\") OVER (PARTITION BY L.\"ItemCode\" ORDER BY D.\"DocDate\", L.\"LineId\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), L.\"PriceSrc\" FROM \"MTC_CA_R_LINE\" L JOIN \"MTC_CA_S_LINE\" D ON D.\"RunId\" = L.\"RunId\" AND D.\"LineId\" = L.\"LineId\" JOIN \"MTC_CA_R_ITEM\" R ON R.\"RunId\" = L.\"RunId\" AND R.\"ItemCode\" = L.\"ItemCode\" LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = L.\"RunId\" AND S.\"ItemCode\" = L.\"ItemCode\" LEFT JOIN \"MTC_CA_S_ORDER\" SO ON SO.\"RunId\" = L.\"RunId\" AND SO.\"OrderType\" = L.\"OrderType\" AND SO.\"OrderEntry\" = L.\"OrderEntry\" LEFT JOIN \"@MTC_COST_IOTYPE\" T ON T.\"Code\" = L.\"TransCode\" WHERE L.\"RunId\" = CAST(? AS BIGINT) AND (? <> '' AND (L.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?)) AND NOT (D.\"ObjType\" IN ('13', '14') AND L.\"Qty\" = 0 AND L.\"Amount\" = 0) UNION ALL SELECT R.\"ItemCode\", S.\"ItemName\", 2 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '零库存尾差结转（JZ04，TAIL-01）' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", CAST(NULL AS DECIMAL(19,6)), CAST(NULL AS DECIMAL(19,6)), 0, -R.\"TailAmt\", R.\"EndQty\", R.\"EndAmount\", CAST('期末数量 0，尾差在 ±TAIL_MAX 以内，结转到 TAIL_ADJ 科目' AS NVARCHAR(200)) FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND (? <> '' AND (R.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?)) AND R.\"TailAmt\" <> 0 UNION ALL SELECT R.\"ItemCode\", S.\"ItemName\", 3 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '本期合计' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", R.\"InQty\", R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\", -R.\"OutQty\", -(R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\"), R.\"EndQty\", R.\"EndAmount\", CAST(NULL AS NVARCHAR(200)) FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND (? <> '' AND (R.\"ItemCode\" LIKE ? || '%' OR S.\"ItmsGrpCod\" = ?)) AND EXISTS (SELECT 1 FROM \"MTC_CA_R_LINE\" L WHERE L.\"RunId\" = R.\"RunId\" AND L.\"ItemCode\" = R.\"ItemCode\")) X ORDER BY \"ItemCode\", \"Seq\", \"DocDate\", \"LineId\""
+    },
+    "invLedgerItem": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode"
+      ],
+      "sql": "SELECT \"ItemCode\", \"ItemName\", \"Seq\", \"DocDate\", \"ObjType\", \"DocNum\", \"LineNum\", \"TransCode\", \"TransName\", \"BusiType\", \"WhsCode\", \"OrderType\", \"OrderEntry\", \"OrderNum\", \"InQty\", \"InAmt\" / NULLIF(\"InQty\", 0) AS \"InPrice\", \"InAmt\", \"OutQty\", \"OutAmt\" / NULLIF(\"OutQty\", 0) AS \"OutPrice\", \"OutAmt\", \"BalQty\", \"BalAmt\" / NULLIF(\"BalQty\", 0) AS \"BalPrice\", \"BalAmt\", \"PriceSrc\" FROM (SELECT R.\"ItemCode\", S.\"ItemName\", 0 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '期初结存' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", CAST(NULL AS DECIMAL(19,6)) AS \"InQty\", CAST(NULL AS DECIMAL(19,6)) AS \"InAmt\", CAST(NULL AS DECIMAL(19,6)) AS \"OutQty\", CAST(NULL AS DECIMAL(19,6)) AS \"OutAmt\", R.\"OpenQty\" AS \"BalQty\", R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" AS \"BalAmt\", CAST(NULL AS NVARCHAR(200)) AS \"PriceSrc\" FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND R.\"ItemCode\" = ? AND EXISTS (SELECT 1 FROM \"MTC_CA_R_LINE\" L WHERE L.\"RunId\" = R.\"RunId\" AND L.\"ItemCode\" = R.\"ItemCode\") UNION ALL SELECT L.\"ItemCode\", S.\"ItemName\", 1, L.\"LineId\", D.\"DocDate\", D.\"ObjType\", D.\"DocNum\", D.\"LineNum\", L.\"TransCode\", T.\"Name\", D.\"BusiType\", D.\"WhsCode\", L.\"OrderType\", L.\"OrderEntry\", SO.\"OrderNum\", CASE WHEN (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN L.\"Qty\" END, CASE WHEN (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN L.\"Amount\" END, CASE WHEN NOT (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN -L.\"Qty\" END, CASE WHEN NOT (L.\"Qty\" > 0 OR (L.\"Qty\" = 0 AND NOT (LEFT(IFNULL(L.\"TransCode\", 'I'), 1) = 'O' AND L.\"TransCode\" <> 'O06'))) THEN -L.\"Amount\" END, R.\"OpenQty\" + SUM(L.\"Qty\") OVER (PARTITION BY L.\"ItemCode\" ORDER BY D.\"DocDate\", L.\"LineId\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), R.\"OpenMat\" + R.\"OpenMfg\" + R.\"OpenLab\" + R.\"OpenSub\" + SUM(L.\"Amount\") OVER (PARTITION BY L.\"ItemCode\" ORDER BY D.\"DocDate\", L.\"LineId\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), L.\"PriceSrc\" FROM \"MTC_CA_R_LINE\" L JOIN \"MTC_CA_S_LINE\" D ON D.\"RunId\" = L.\"RunId\" AND D.\"LineId\" = L.\"LineId\" JOIN \"MTC_CA_R_ITEM\" R ON R.\"RunId\" = L.\"RunId\" AND R.\"ItemCode\" = L.\"ItemCode\" LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = L.\"RunId\" AND S.\"ItemCode\" = L.\"ItemCode\" LEFT JOIN \"MTC_CA_S_ORDER\" SO ON SO.\"RunId\" = L.\"RunId\" AND SO.\"OrderType\" = L.\"OrderType\" AND SO.\"OrderEntry\" = L.\"OrderEntry\" LEFT JOIN \"@MTC_COST_IOTYPE\" T ON T.\"Code\" = L.\"TransCode\" WHERE L.\"RunId\" = CAST(? AS BIGINT) AND L.\"ItemCode\" = ? AND NOT (D.\"ObjType\" IN ('13', '14') AND L.\"Qty\" = 0 AND L.\"Amount\" = 0) UNION ALL SELECT R.\"ItemCode\", S.\"ItemName\", 2 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '零库存尾差结转（JZ04，TAIL-01）' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", CAST(NULL AS DECIMAL(19,6)), CAST(NULL AS DECIMAL(19,6)), 0, -R.\"TailAmt\", R.\"EndQty\", R.\"EndAmount\", CAST('期末数量 0，尾差在 ±TAIL_MAX 以内，结转到 TAIL_ADJ 科目' AS NVARCHAR(200)) FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND R.\"ItemCode\" = ? AND R.\"TailAmt\" <> 0 UNION ALL SELECT R.\"ItemCode\", S.\"ItemName\", 3 AS \"Seq\", CAST(NULL AS BIGINT) AS \"LineId\", CAST(NULL AS DATE) AS \"DocDate\", CAST(NULL AS NVARCHAR(20)) AS \"ObjType\", CAST(NULL AS NVARCHAR(50)) AS \"DocNum\", CAST(NULL AS INTEGER) AS \"LineNum\", CAST(NULL AS NVARCHAR(10)) AS \"TransCode\", '本期合计' AS \"TransName\", CAST(NULL AS NVARCHAR(20)) AS \"BusiType\", CAST(NULL AS NVARCHAR(8)) AS \"WhsCode\", CAST(NULL AS NVARCHAR(20)) AS \"OrderType\", CAST(NULL AS INTEGER) AS \"OrderEntry\", CAST(NULL AS NVARCHAR(20)) AS \"OrderNum\", R.\"InQty\", R.\"InMat\" + R.\"InMfg\" + R.\"InLab\" + R.\"InSub\", -R.\"OutQty\", -(R.\"OutMat\" + R.\"OutMfg\" + R.\"OutLab\" + R.\"OutSub\"), R.\"EndQty\", R.\"EndAmount\", CAST(NULL AS NVARCHAR(200)) FROM \"MTC_CA_R_ITEM\" R LEFT JOIN \"MTC_CA_S_ITEM\" S ON S.\"RunId\" = R.\"RunId\" AND S.\"ItemCode\" = R.\"ItemCode\" WHERE R.\"RunId\" = CAST(? AS BIGINT) AND R.\"ItemCode\" = ? AND EXISTS (SELECT 1 FROM \"MTC_CA_R_LINE\" L WHERE L.\"RunId\" = R.\"RunId\" AND L.\"ItemCode\" = R.\"ItemCode\")) X ORDER BY \"ItemCode\", \"Seq\", \"DocDate\", \"LineId\""
+    },
+    "orders": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 O.\"OrderType\", O.\"OrderEntry\", S.\"OrderNum\", O.\"WorType\", O.\"ItemCode\", O.\"iLevel\", O.\"PlannedQty\", O.\"RecvQty\", O.\"CostMat\", O.\"CostMfg\", O.\"CostLab\", O.\"CostSub\", O.\"CostAmt\", O.\"UnitCost\", O.\"WipAmt\", O.\"CloseDifAmt\", O.\"ClosedInFc\" FROM \"MTC_CA_R_ORDER\" O LEFT JOIN \"MTC_CA_S_ORDER\" S ON S.\"RunId\" = O.\"RunId\" AND S.\"OrderType\" = O.\"OrderType\" AND S.\"OrderEntry\" = O.\"OrderEntry\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND (? = '' OR O.\"ItemCode\" LIKE ? || '%' OR TO_NVARCHAR(O.\"OrderEntry\") = ? OR S.\"OrderNum\" = ?) ORDER BY O.\"iLevel\", O.\"OrderType\", O.\"OrderEntry\""
+    },
+    "jdtSummary": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"TransCode\", MAX(\"TransName\") AS \"TransName\", COUNT(*) AS \"Lines\", SUM(\"Debit\") AS \"Debit\", SUM(\"Credit\") AS \"Credit\", SUM(\"Debit\") - SUM(\"Credit\") AS \"Diff\", SUM(CASE WHEN IFNULL(\"AcctCode\", '') = '' THEN 1 ELSE 0 END) AS \"NoAcct\" FROM \"MTC_CA_R_JDT\" WHERE \"RunId\" = CAST(? AS BIGINT) GROUP BY \"TransCode\" ORDER BY \"TransCode\""
+    },
+    "jdtLines": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "transCode"
+      ],
+      "sql": "SELECT \"LineNo\", \"RefDate\", \"AcctCode\", \"Debit\", \"Credit\", \"OcrCode\", \"Project\", \"VendorCode\" FROM \"MTC_CA_R_JDT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"TransCode\" = ? ORDER BY \"LineNo\""
+    },
+    "jdtSrcSum": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "transCode",
+        "lineNo"
+      ],
+      "sql": "SELECT S0.\"SrcType\", IFNULL(L.\"TransCode\", '') AS \"BizTrans\", COUNT(*) AS \"Lines\", SUM(CASE WHEN S0.\"Amount\" > 0 THEN S0.\"Amount\" ELSE 0 END) AS \"Debit\", SUM(CASE WHEN S0.\"Amount\" < 0 THEN -S0.\"Amount\" ELSE 0 END) AS \"Credit\" FROM \"MTC_CA_R_JDT_SRC\" S0 JOIN \"MTC_CA_R_JDT\" J ON J.\"RunId\" = S0.\"RunId\" AND J.\"TransCode\" = S0.\"TransCode\" AND IFNULL(J.\"AcctCode\", '') = IFNULL(S0.\"AcctCode\", '') AND IFNULL(J.\"OcrCode\", '') = IFNULL(S0.\"OcrCode\", '') AND IFNULL(J.\"Project\", '') = IFNULL(S0.\"Project\", '') AND IFNULL(J.\"VendorCode\", '') = IFNULL(S0.\"VendorCode\", '') LEFT JOIN \"MTC_CA_R_LINE\" L ON S0.\"SrcType\" = 'LINE' AND L.\"RunId\" = S0.\"RunId\" AND L.\"LineId\" = CASE WHEN S0.\"SrcKey\" LIKE_REGEXPR '^[0-9]+$' THEN TO_BIGINT(S0.\"SrcKey\") END WHERE S0.\"RunId\" = CAST(? AS BIGINT) AND J.\"TransCode\" = ? AND J.\"LineNo\" = CAST(? AS INTEGER) GROUP BY S0.\"SrcType\", IFNULL(L.\"TransCode\", '') ORDER BY 1, 2"
+    },
+    "jdtSrc": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "transCode",
+        "lineNo"
+      ],
+      "sql": "WITH X AS (SELECT S0.\"RunId\", S0.\"SrcId\", S0.\"SrcType\", S0.\"SrcKey\", S0.\"Amount\", S0.\"Note\", CASE WHEN S0.\"SrcType\" = 'DOC' AND S0.\"SrcKey\" LIKE_REGEXPR '^[A-Z0-9]+-[0-9]+-[0-9]+$' THEN SUBSTR_BEFORE(S0.\"SrcKey\", '-') END AS \"T\", CASE WHEN S0.\"SrcType\" = 'DOC' AND S0.\"SrcKey\" LIKE_REGEXPR '^[A-Z0-9]+-[0-9]+-[0-9]+$' THEN TO_INTEGER(SUBSTR_BEFORE(SUBSTR_AFTER(S0.\"SrcKey\", '-'), '-')) END AS \"E\", CASE WHEN S0.\"SrcType\" = 'DOC' AND S0.\"SrcKey\" LIKE_REGEXPR '^[A-Z0-9]+-[0-9]+-[0-9]+$' THEN TO_INTEGER(SUBSTR_AFTER(SUBSTR_AFTER(S0.\"SrcKey\", '-'), '-')) END AS \"N\", CASE WHEN S0.\"SrcType\" IN ('GL', 'OMRV') AND S0.\"SrcKey\" LIKE_REGEXPR '^[0-9]+-[0-9]+$' THEN TO_INTEGER(SUBSTR_BEFORE(S0.\"SrcKey\", '-')) END AS \"H\" FROM \"MTC_CA_R_JDT_SRC\" S0 JOIN \"MTC_CA_R_JDT\" J ON J.\"RunId\" = S0.\"RunId\" AND J.\"TransCode\" = S0.\"TransCode\" AND IFNULL(J.\"AcctCode\", '') = IFNULL(S0.\"AcctCode\", '') AND IFNULL(J.\"OcrCode\", '') = IFNULL(S0.\"OcrCode\", '') AND IFNULL(J.\"Project\", '') = IFNULL(S0.\"Project\", '') AND IFNULL(J.\"VendorCode\", '') = IFNULL(S0.\"VendorCode\", '') WHERE S0.\"RunId\" = CAST(? AS BIGINT) AND J.\"TransCode\" = ? AND J.\"LineNo\" = CAST(? AS INTEGER)), D AS (SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"OPDN\" M ON X.\"T\" = '20' AND M.\"DocEntry\" = X.\"E\" JOIN \"PDN1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ORPD\" M ON X.\"T\" = '21' AND M.\"DocEntry\" = X.\"E\" JOIN \"RPD1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"OPCH\" M ON X.\"T\" = '18' AND M.\"DocEntry\" = X.\"E\" JOIN \"PCH1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ORPC\" M ON X.\"T\" = '19' AND M.\"DocEntry\" = X.\"E\" JOIN \"RPC1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ODLN\" M ON X.\"T\" = '15' AND M.\"DocEntry\" = X.\"E\" JOIN \"DLN1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ORDN\" M ON X.\"T\" = '16' AND M.\"DocEntry\" = X.\"E\" JOIN \"RDN1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"OINV\" M ON X.\"T\" = 'INV' AND M.\"DocEntry\" = X.\"E\" JOIN \"INV1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ORIN\" M ON X.\"T\" = 'RIN' AND M.\"DocEntry\" = X.\"E\" JOIN \"RIN1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"OINV\" M ON X.\"T\" = '13' AND M.\"DocEntry\" = X.\"E\" JOIN \"INV1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\" UNION ALL SELECT X.\"SrcId\", M.\"DocNum\", M.\"DocDate\", D.\"ItemCode\", D.\"Quantity\" AS \"Qty\" FROM X JOIN \"ORIN\" M ON X.\"T\" = '14' AND M.\"DocEntry\" = X.\"E\" JOIN \"RIN1\" D ON D.\"DocEntry\" = M.\"DocEntry\" AND D.\"LineNum\" = X.\"N\") SELECT X.\"SrcType\", X.\"SrcKey\", CASE WHEN X.\"Amount\" > 0 THEN X.\"Amount\" ELSE 0 END AS \"Debit\", CASE WHEN X.\"Amount\" < 0 THEN -X.\"Amount\" ELSE 0 END AS \"Credit\", COALESCE(S.\"DocDate\", TO_DATE(D.\"DocDate\"), TO_DATE(M.\"U_DocDate\"), TO_DATE(H.\"RefDate\")) AS \"DocDate\", COALESCE(TO_NVARCHAR(S.\"ObjType\"), X.\"T\", CASE X.\"SrcType\" WHEN 'OMRV' THEN '重估单' WHEN 'GL' THEN '日记账' WHEN 'ORDER' THEN O.\"OrderType\" END) AS \"ObjType\", COALESCE(TO_NVARCHAR(S.\"DocNum\"), TO_NVARCHAR(D.\"DocNum\"), TO_NVARCHAR(M.\"DocNum\"), TO_NVARCHAR(H.\"Number\"), O.\"OrderNum\") AS \"DocNum\", COALESCE(S.\"LineNum\", X.\"N\") AS \"LineNum\", COALESCE(L.\"ItemCode\", D.\"ItemCode\", O.\"ItemCode\") AS \"ItemCode\", L.\"TransCode\" AS \"BizTrans\", COALESCE(L.\"Qty\", D.\"Qty\") AS \"Qty\", CASE WHEN L.\"OrderEntry\" IS NOT NULL THEN L.\"OrderType\" || '-' || IFNULL(LO.\"OrderNum\", 'Entry ' || L.\"OrderEntry\") WHEN X.\"SrcType\" = 'ORDER' THEN O.\"OrderType\" || '-' || O.\"OrderNum\" END AS \"OrderRefNum\", COALESCE(X.\"Note\", CASE WHEN X.\"SrcType\" = 'GL' AND X.\"H\" IS NULL THEN '总账科目 ' || X.\"SrcKey\" || ' 本期发生额' END) AS \"Note\" FROM X LEFT JOIN \"MTC_CA_R_LINE\" L ON X.\"SrcType\" = 'LINE' AND L.\"RunId\" = X.\"RunId\" AND L.\"LineId\" = CASE WHEN X.\"SrcKey\" LIKE_REGEXPR '^[0-9]+$' THEN TO_BIGINT(X.\"SrcKey\") END LEFT JOIN \"MTC_CA_S_LINE\" S ON S.\"RunId\" = L.\"RunId\" AND S.\"LineId\" = L.\"LineId\" LEFT JOIN \"MTC_CA_S_ORDER\" LO ON LO.\"RunId\" = L.\"RunId\" AND LO.\"OrderType\" = L.\"OrderType\" AND LO.\"OrderEntry\" = L.\"OrderEntry\" LEFT JOIN \"MTC_CA_S_ORDER\" O ON X.\"SrcType\" = 'ORDER' AND O.\"RunId\" = X.\"RunId\" AND O.\"OrderType\" || '-' || O.\"OrderEntry\" = X.\"SrcKey\" LEFT JOIN \"@MTC_OMRV\" M ON X.\"SrcType\" = 'OMRV' AND M.\"DocEntry\" = X.\"H\" LEFT JOIN \"OJDT\" H ON X.\"SrcType\" = 'GL' AND H.\"TransId\" = X.\"H\" LEFT JOIN D ON D.\"SrcId\" = X.\"SrcId\" ORDER BY 5, X.\"SrcType\", X.\"SrcKey\""
+    },
+    "orderHead": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT O.\"OrderType\", O.\"OrderEntry\", S.\"OrderNum\", O.\"WorType\", O.\"ItemCode\", I.\"ItemName\", O.\"iLevel\", S.\"PostDate\", S.\"B1Status\", S.\"CloseDate\", S.\"StatusAtEnd\", O.\"ClosedInFc\", S.\"InScope\", S.\"CardCode\", O.\"PlannedQty\", O.\"PrevRecvQty\", O.\"RecvQty\", O.\"Ratio\", O.\"AllocMfg\", O.\"AllocLab\", O.\"CostMat\", O.\"CostMfg\", O.\"CostLab\", O.\"CostSub\", O.\"CostAmt\", O.\"UnitCost\", O.\"WipAmt\", O.\"CloseDifAmt\" FROM \"MTC_CA_R_ORDER\" O LEFT JOIN \"MTC_CA_S_ORDER\" S ON S.\"RunId\" = O.\"RunId\" AND S.\"OrderType\" = O.\"OrderType\" AND S.\"OrderEntry\" = O.\"OrderEntry\" LEFT JOIN \"MTC_CA_S_ITEM\" I ON I.\"RunId\" = O.\"RunId\" AND I.\"ItemCode\" = O.\"ItemCode\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"OrderType\" = ? AND O.\"OrderEntry\" = CAST(? AS INTEGER)"
+    },
+    "orderMat": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT O.\"ItemCode\", I.\"ItemName\", P.\"PlanQty\", O.\"OpenIssQty\", O.\"OpenIssMat\" + O.\"OpenIssMfg\" + O.\"OpenIssLab\" + O.\"OpenIssSub\" AS \"OpenIssAmt\", O.\"OpenCarMat\" + O.\"OpenCarMfg\" + O.\"OpenCarLab\" + O.\"OpenCarSub\" AS \"OpenCarAmt\", O.\"IssQty\", O.\"IssMat\" + O.\"IssMfg\" + O.\"IssLab\" + O.\"IssSub\" AS \"IssAmt\", O.\"CarMat\" + O.\"CarMfg\" + O.\"CarLab\" + O.\"CarSub\" AS \"CarAmt\", O.\"CarMat\", O.\"CarMfg\", O.\"CarLab\", O.\"CarSub\", O.\"WipMat\" + O.\"WipMfg\" + O.\"WipLab\" + O.\"WipSub\" AS \"WipAmt\", O.\"ClsMat\" + O.\"ClsMfg\" + O.\"ClsLab\" + O.\"ClsSub\" AS \"ClsAmt\" FROM \"MTC_CA_R_ORDER_MAT\" O LEFT JOIN \"MTC_CA_S_ITEM\" I ON I.\"RunId\" = O.\"RunId\" AND I.\"ItemCode\" = O.\"ItemCode\" LEFT JOIN (SELECT \"RunId\", \"OrderType\", \"OrderEntry\", \"ItemCode\", SUM(\"PlannedQty\") AS \"PlanQty\" FROM \"MTC_CA_S_ORDER_LINE\" GROUP BY \"RunId\", \"OrderType\", \"OrderEntry\", \"ItemCode\") P ON P.\"RunId\" = O.\"RunId\" AND P.\"OrderType\" = O.\"OrderType\" AND P.\"OrderEntry\" = O.\"OrderEntry\" AND P.\"ItemCode\" = O.\"ItemCode\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"OrderType\" = ? AND O.\"OrderEntry\" = CAST(? AS INTEGER) ORDER BY O.\"ItemCode\""
+    },
+    "orderAlloc": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT O.\"PoolCode\", C.\"PoolName\", O.\"Elem\", O.\"Hours\", O.\"RecvQty\", O.\"Weight\", O.\"Ratio\", O.\"Amount\" FROM \"MTC_CA_R_ALLOC\" O LEFT JOIN \"MTC_CA_C_POOL\" C ON C.\"PoolCode\" = O.\"PoolCode\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"OrderType\" = ? AND O.\"OrderEntry\" = CAST(? AS INTEGER) ORDER BY O.\"PoolCode\", O.\"Elem\""
+    },
+    "orderLines": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT S.\"DocDate\", S.\"ObjType\", S.\"DocNum\", S.\"LineNum\", O.\"TransCode\", S.\"BusiType\", O.\"ItemCode\", S.\"WhsCode\", O.\"Qty\", O.\"Price\", O.\"MatAmt\", O.\"MfgAmt\", O.\"LabAmt\", O.\"SubAmt\", O.\"Amount\", O.\"PriceSrc\", O.\"RuleId\" FROM \"MTC_CA_R_LINE\" O JOIN \"MTC_CA_S_LINE\" S ON S.\"RunId\" = O.\"RunId\" AND S.\"LineId\" = O.\"LineId\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"OrderType\" = ? AND O.\"OrderEntry\" = CAST(? AS INTEGER) ORDER BY S.\"DocDate\", S.\"DocEntry\", S.\"LineNum\""
+    },
+    "orderSubFeeSum": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT \"OpenIssMat\" + \"OpenIssMfg\" + \"OpenIssLab\" + \"OpenIssSub\" - \"OpenCarMat\" - \"OpenCarMfg\" - \"OpenCarLab\" - \"OpenCarSub\" AS \"FeeOpen\", \"IssMat\" + \"IssMfg\" + \"IssLab\" + \"IssSub\" AS \"FeeIss\", \"CarMat\" + \"CarMfg\" + \"CarLab\" + \"CarSub\" AS \"FeeCar\", \"ClsMat\" + \"ClsMfg\" + \"ClsLab\" + \"ClsSub\" AS \"FeeCls\", \"WipMat\" + \"WipMfg\" + \"WipLab\" + \"WipSub\" AS \"FeeWip\" FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) AND \"ItemCode\" = '#SUBFEE'"
+    },
+    "orderSubFee": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT F.\"Src\", F.\"DocDate\", CASE F.\"Src\" WHEN 'PDN' THEN TO_NVARCHAR(P.\"DocNum\") WHEN 'RPD' THEN TO_NVARCHAR(R.\"DocNum\") ELSE TO_NVARCHAR(M.\"DocNum\") END AS \"DocNum\", TO_INTEGER(SUBSTR_AFTER(F.\"SrcKey\", '-')) AS \"LineNum\", IFNULL(P.\"CardCode\", R.\"CardCode\") AS \"CardCode\", F.\"ItemCode\", F.\"Qty\", F.\"Amount\", G.\"DocNum\" AS \"RcptNum\", F.\"MatchNote\" FROM \"MTC_CA_S_SUBFEE\" F LEFT JOIN \"OPDN\" P ON F.\"Src\" = 'PDN' AND P.\"DocEntry\" = TO_INTEGER(SUBSTR_BEFORE(F.\"SrcKey\", '-')) LEFT JOIN \"ORPD\" R ON F.\"Src\" = 'RPD' AND R.\"DocEntry\" = TO_INTEGER(SUBSTR_BEFORE(F.\"SrcKey\", '-')) LEFT JOIN \"@MTC_OMRV\" M ON F.\"Src\" = 'PROWW' AND M.\"DocEntry\" = TO_INTEGER(SUBSTR_BEFORE(F.\"SrcKey\", '-')) LEFT JOIN \"OIGN\" G ON G.\"DocEntry\" = F.\"RcptEntry\" WHERE F.\"RunId\" = CAST(? AS BIGINT) AND F.\"OrderType\" = ? AND F.\"OrderEntry\" = CAST(? AS INTEGER) ORDER BY F.\"DocDate\", F.\"Src\", F.\"FeeId\""
+    },
+    "itemFlow": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "itemCode"
+      ],
+      "sql": "SELECT F.\"TransCode\", T.\"Name\" AS \"TransName\", F.\"Qty\", F.\"MatAmt\", F.\"MfgAmt\", F.\"LabAmt\", F.\"SubAmt\", F.\"Amount\" FROM \"MTC_CA_V_ITEM_FLOW\" F LEFT JOIN \"@MTC_COST_IOTYPE\" T ON T.\"Code\" = F.\"TransCode\" WHERE F.\"RunId\" = CAST(? AS BIGINT) AND F.\"ItemCode\" = ? ORDER BY F.\"TransCode\""
+    },
+    "itemLines": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "itemCode"
+      ],
+      "sql": "SELECT S.\"DocDate\", S.\"ObjType\", S.\"DocNum\", S.\"LineNum\", O.\"TransCode\", S.\"BusiType\", S.\"WhsCode\", O.\"OrderType\", O.\"OrderEntry\", SO.\"OrderNum\", O.\"Qty\", O.\"Price\", O.\"Amount\", O.\"PriceSrc\", O.\"RuleId\" FROM \"MTC_CA_R_LINE\" O JOIN \"MTC_CA_S_LINE\" S ON S.\"RunId\" = O.\"RunId\" AND S.\"LineId\" = O.\"LineId\" LEFT JOIN \"MTC_CA_S_ORDER\" SO ON SO.\"RunId\" = O.\"RunId\" AND SO.\"OrderType\" = O.\"OrderType\" AND SO.\"OrderEntry\" = O.\"OrderEntry\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"ItemCode\" = ? ORDER BY S.\"DocDate\", S.\"DocEntry\", S.\"LineNum\""
+    },
+    "wipSummary": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"WorType\", COUNT(*) AS \"Cnt\", SUM(\"WipAmt\") AS \"WipAmt\", SUM(\"CloseDifAmt\") AS \"CloseDifAmt\", SUM(CASE WHEN \"ClosedInFc\" = 'Y' THEN 1 ELSE 0 END) AS \"ClosedCnt\" FROM \"MTC_CA_R_ORDER\" WHERE \"RunId\" = CAST(? AS BIGINT) AND (\"WipAmt\" <> 0 OR \"CloseDifAmt\" <> 0) GROUP BY \"WorType\" ORDER BY \"WorType\""
+    },
+    "wipList": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 O.\"OrderType\", O.\"OrderEntry\", S.\"OrderNum\", O.\"WorType\", O.\"ItemCode\", O.\"iLevel\", M.\"WipMat\", M.\"WipMfg\", M.\"WipLab\", M.\"WipSub\", O.\"WipAmt\", O.\"CloseDifAmt\", O.\"ClosedInFc\" FROM \"MTC_CA_R_ORDER\" O LEFT JOIN \"MTC_CA_S_ORDER\" S ON S.\"RunId\" = O.\"RunId\" AND S.\"OrderType\" = O.\"OrderType\" AND S.\"OrderEntry\" = O.\"OrderEntry\" LEFT JOIN (SELECT \"RunId\", \"OrderType\", \"OrderEntry\", SUM(\"WipMat\") AS \"WipMat\", SUM(\"WipMfg\") AS \"WipMfg\", SUM(\"WipLab\") AS \"WipLab\", SUM(\"WipSub\") AS \"WipSub\" FROM \"MTC_CA_R_ORDER_MAT\" GROUP BY \"RunId\", \"OrderType\", \"OrderEntry\") M ON M.\"RunId\" = O.\"RunId\" AND M.\"OrderType\" = O.\"OrderType\" AND M.\"OrderEntry\" = O.\"OrderEntry\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND (O.\"WipAmt\" <> 0 OR O.\"CloseDifAmt\" <> 0) AND (? = '' OR O.\"ItemCode\" LIKE ? || '%' OR TO_NVARCHAR(O.\"OrderEntry\") = ? OR S.\"OrderNum\" = ?) ORDER BY O.\"WorType\", ABS(O.\"WipAmt\") DESC"
+    },
+    "expSum": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "runId",
+        "runId"
+      ],
+      "sql": "SELECT X.\"PoolCode\", MAX(C.\"PoolName\") AS \"PoolName\", X.\"Elem\", X.\"Src\", X.\"SrcTrans\", X.\"AcctCode\", COUNT(*) AS \"Lines\", SUM(X.\"Amount\") AS \"Amount\" FROM (SELECT IFNULL(PS.\"PoolCode\", DP.\"PoolCode\") AS \"PoolCode\", E.\"Elem\", E.\"Src\", E.\"SrcTrans\", E.\"AcctCode\", E.\"OcrCode\", E.\"DocDate\", E.\"SrcKey\", E.\"SrcObj\", E.\"SrcDoc\", CAST(NULL AS NVARCHAR(50)) AS \"ItemCode\", CAST(NULL AS DECIMAL(19,6)) AS \"Qty\", E.\"Amount\", E.\"Note\" FROM \"MTC_CA_S_EXP\" E LEFT JOIN \"MTC_CA_C_POOL_SRC\" PS ON PS.\"OcrCode\" = E.\"OcrCode\" AND E.\"FcCode\" BETWEEN PS.\"FromFc\" AND PS.\"ToFc\" CROSS JOIN (SELECT MAX(\"PoolCode\") AS \"PoolCode\" FROM \"MTC_CA_C_POOL\" WHERE \"IsDefault\" = 'Y') DP WHERE E.\"RunId\" = CAST(? AS BIGINT) UNION ALL SELECT L.\"PoolCode\", 'MFG', 'SHARED', L.\"TransCode\", D.\"AcctCode\", D.\"OcrCode\", D.\"DocDate\", D.\"ObjType\" || '-' || IFNULL(D.\"DocNum\", TO_NVARCHAR(D.\"DocEntry\")) || '-' || IFNULL(TO_NVARCHAR(D.\"LineNum\"), ''), D.\"ObjType\", D.\"DocEntry\", L.\"ItemCode\", -L.\"Qty\", -L.\"Amount\", L.\"PriceSrc\" FROM \"MTC_CA_R_LINE\" L JOIN \"MTC_CA_S_LINE\" D ON D.\"RunId\" = L.\"RunId\" AND D.\"LineId\" = L.\"LineId\" WHERE L.\"RunId\" = CAST(? AS BIGINT) AND L.\"IsShared\" = 'Y' UNION ALL SELECT \"MTC_CA_F_PARAM\"('CLOSE_DIF_POOL', O.\"FcCode\"), 'MFG', 'CLOSEDIF', CAST(NULL AS NVARCHAR(20)), CAST(NULL AS NVARCHAR(15)), CAST(NULL AS NVARCHAR(20)), CAST(NULL AS DATE), O.\"OrderType\" || '-' || TO_NVARCHAR(O.\"OrderEntry\"), O.\"OrderType\", O.\"OrderEntry\", O.\"ItemCode\", CAST(NULL AS DECIMAL(19,6)), O.\"CloseDifAmt\", '订单本期关单差异' FROM \"MTC_CA_R_ORDER\" O WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"CloseDifAmt\" <> 0) X LEFT JOIN \"MTC_CA_C_POOL\" C ON C.\"PoolCode\" = X.\"PoolCode\" GROUP BY X.\"PoolCode\", X.\"Elem\", X.\"Src\", X.\"SrcTrans\", X.\"AcctCode\" ORDER BY X.\"PoolCode\", X.\"Elem\", X.\"Src\", X.\"SrcTrans\", X.\"AcctCode\""
+    },
+    "expDtl": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "runId",
+        "runId",
+        "pool0",
+        "elem",
+        "kind",
+        "keyCode",
+        "text"
+      ],
+      "sql": "SELECT TOP 2001 X.\"DocDate\", X.\"SrcKey\", X.\"SrcObj\", X.\"DocNum\", X.\"SrcDoc\", X.\"JdtNum\", X.\"OcrCode\", X.\"ItemCode\", X.\"Qty\", X.\"Amount\", X.\"Note\" FROM (SELECT IFNULL(PS.\"PoolCode\", DP.\"PoolCode\") AS \"PoolCode\", E.\"Elem\", E.\"Src\", E.\"SrcTrans\", E.\"AcctCode\", E.\"OcrCode\", E.\"DocDate\", E.\"SrcKey\", E.\"SrcObj\", CASE WHEN E.\"Src\" = 'JDT' THEN TO_NVARCHAR(H.\"BaseRef\") WHEN E.\"Src\" IN ('MRV', 'PROWW') THEN TO_NVARCHAR(M.\"DocNum\") END AS \"DocNum\", E.\"SrcDoc\", CASE WHEN E.\"Src\" = 'JDT' THEN TO_NVARCHAR(H.\"Number\") END AS \"JdtNum\", CAST(NULL AS NVARCHAR(50)) AS \"ItemCode\", CAST(NULL AS DECIMAL(19,6)) AS \"Qty\", E.\"Amount\", E.\"Note\" FROM \"MTC_CA_S_EXP\" E LEFT JOIN \"MTC_CA_C_POOL_SRC\" PS ON PS.\"OcrCode\" = E.\"OcrCode\" AND E.\"FcCode\" BETWEEN PS.\"FromFc\" AND PS.\"ToFc\" LEFT JOIN \"OJDT\" H ON E.\"Src\" = 'JDT' AND H.\"TransId\" = CASE WHEN E.\"SrcKey\" LIKE_REGEXPR '^[0-9]+-' THEN TO_INTEGER(SUBSTR_BEFORE(E.\"SrcKey\", '-')) END LEFT JOIN \"@MTC_OMRV\" M ON E.\"Src\" IN ('MRV', 'PROWW') AND M.\"DocEntry\" = E.\"SrcDoc\" CROSS JOIN (SELECT MAX(\"PoolCode\") AS \"PoolCode\" FROM \"MTC_CA_C_POOL\" WHERE \"IsDefault\" = 'Y') DP WHERE E.\"RunId\" = CAST(? AS BIGINT) UNION ALL SELECT L.\"PoolCode\", 'MFG', 'SHARED', L.\"TransCode\", D.\"AcctCode\", D.\"OcrCode\", D.\"DocDate\", D.\"ObjType\" || '-' || IFNULL(D.\"DocNum\", TO_NVARCHAR(D.\"DocEntry\")) || '-' || IFNULL(TO_NVARCHAR(D.\"LineNum\"), ''), D.\"ObjType\", D.\"DocNum\", D.\"DocEntry\", CAST(NULL AS NVARCHAR(20)), L.\"ItemCode\", -L.\"Qty\", -L.\"Amount\", L.\"PriceSrc\" FROM \"MTC_CA_R_LINE\" L JOIN \"MTC_CA_S_LINE\" D ON D.\"RunId\" = L.\"RunId\" AND D.\"LineId\" = L.\"LineId\" WHERE L.\"RunId\" = CAST(? AS BIGINT) AND L.\"IsShared\" = 'Y' UNION ALL SELECT \"MTC_CA_F_PARAM\"('CLOSE_DIF_POOL', O.\"FcCode\"), 'MFG', 'CLOSEDIF', CAST(NULL AS NVARCHAR(20)), CAST(NULL AS NVARCHAR(15)), CAST(NULL AS NVARCHAR(20)), CAST(NULL AS DATE), O.\"OrderType\" || '-' || TO_NVARCHAR(O.\"OrderEntry\"), O.\"OrderType\", SO.\"OrderNum\", O.\"OrderEntry\", CAST(NULL AS NVARCHAR(20)), O.\"ItemCode\", CAST(NULL AS DECIMAL(19,6)), O.\"CloseDifAmt\", '订单本期关单差异' FROM \"MTC_CA_R_ORDER\" O LEFT JOIN \"MTC_CA_S_ORDER\" SO ON SO.\"RunId\" = O.\"RunId\" AND SO.\"OrderType\" = O.\"OrderType\" AND SO.\"OrderEntry\" = O.\"OrderEntry\" WHERE O.\"RunId\" = CAST(? AS BIGINT) AND O.\"CloseDifAmt\" <> 0) X WHERE IFNULL(X.\"PoolCode\", '') = ? AND X.\"Elem\" = ? AND X.\"Src\" = ? AND IFNULL(X.\"SrcTrans\", '') = ? AND IFNULL(X.\"AcctCode\", '') = ? ORDER BY X.\"DocDate\", X.\"SrcKey\""
+    },
+    "poolSummary": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "runId"
+      ],
+      "sql": "SELECT P.\"PoolCode\", MAX(C.\"PoolName\") AS \"PoolName\", P.\"Elem\", SUM(CASE WHEN P.\"Src\" = 'JDT' THEN P.\"Amount\" ELSE 0 END) AS \"SrcJDT\", SUM(CASE WHEN P.\"Src\" = 'MRV' THEN P.\"Amount\" ELSE 0 END) AS \"SrcMRV\", SUM(CASE WHEN P.\"Src\" = 'PROWW' THEN P.\"Amount\" ELSE 0 END) AS \"SrcPROWW\", SUM(CASE WHEN P.\"Src\" = 'SHARED' THEN P.\"Amount\" ELSE 0 END) AS \"SrcSHARED\", SUM(CASE WHEN P.\"Src\" = 'CLOSEDIF' THEN P.\"Amount\" ELSE 0 END) AS \"SrcCLOSEDIF\", SUM(P.\"Amount\") AS \"PoolAmt\", MAX(IFNULL(A.\"Amt\", 0)) AS \"AllocAmt\", SUM(P.\"Amount\") - MAX(IFNULL(A.\"Amt\", 0)) AS \"Unalloc\", MAX(IFNULL(A.\"Cnt\", 0)) AS \"OrderCnt\" FROM \"MTC_CA_R_POOL\" P LEFT JOIN \"MTC_CA_C_POOL\" C ON C.\"PoolCode\" = P.\"PoolCode\" LEFT JOIN (SELECT \"PoolCode\", \"Elem\", SUM(\"Amount\") AS \"Amt\", COUNT(*) AS \"Cnt\" FROM \"MTC_CA_R_ALLOC\" WHERE \"RunId\" = CAST(? AS BIGINT) GROUP BY \"PoolCode\", \"Elem\") A ON A.\"PoolCode\" = P.\"PoolCode\" AND A.\"Elem\" = P.\"Elem\" WHERE P.\"RunId\" = CAST(? AS BIGINT) GROUP BY P.\"PoolCode\", P.\"Elem\" ORDER BY P.\"PoolCode\", P.\"Elem\""
+    },
+    "poolAlloc": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "poolCode",
+        "elem"
+      ],
+      "sql": "SELECT A.\"OrderType\", A.\"OrderEntry\", S.\"OrderNum\", O.\"WorType\", O.\"ItemCode\", A.\"Hours\", A.\"RecvQty\", A.\"Weight\", A.\"Ratio\", A.\"Amount\" FROM \"MTC_CA_R_ALLOC\" A LEFT JOIN \"MTC_CA_R_ORDER\" O ON O.\"RunId\" = A.\"RunId\" AND O.\"OrderType\" = A.\"OrderType\" AND O.\"OrderEntry\" = A.\"OrderEntry\" LEFT JOIN \"MTC_CA_S_ORDER\" S ON S.\"RunId\" = A.\"RunId\" AND S.\"OrderType\" = A.\"OrderType\" AND S.\"OrderEntry\" = A.\"OrderEntry\" WHERE A.\"RunId\" = CAST(? AS BIGINT) AND A.\"PoolCode\" = ? AND A.\"Elem\" = ? ORDER BY A.\"Amount\" DESC"
+    },
+    "goodsOut": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 G.\"ObjType\", COALESCE(D.\"DocNum\", R.\"DocNum\") AS \"DocNum\", G.\"DocEntry\", G.\"LineNum\", G.\"DocDate\", G.\"CardCode\", G.\"CustType\", G.\"IsSample\", G.\"ItemCode\", G.\"DocQty\", G.\"InvQty\", G.\"RetQty\", G.\"OpenQty\", G.\"UnitCost\", G.\"CostAmt\", G.\"CostSrc\" FROM \"MTC_CA_R_GOODS_OUT\" G LEFT JOIN \"ODLN\" D ON G.\"ObjType\" = '15' AND D.\"DocEntry\" = G.\"DocEntry\" LEFT JOIN \"ORDN\" R ON G.\"ObjType\" = '16' AND R.\"DocEntry\" = G.\"DocEntry\" WHERE G.\"RunId\" = CAST(? AS BIGINT) AND (? = '' OR G.\"CardCode\" LIKE ? || '%' OR G.\"ItemCode\" LIKE ? || '%') ORDER BY G.\"CardCode\", G.\"DocDate\", G.\"DocEntry\", G.\"LineNum\""
+    },
+    "goodsOutSum": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT IFNULL(\"CustType\", '') AS \"CustType\", \"IsSample\", COUNT(*) AS \"Lines\", SUM(\"OpenQty\") AS \"OpenQty\", SUM(\"CostAmt\") AS \"CostAmt\", SUM(CASE WHEN \"UnitCost\" IS NULL THEN 1 ELSE 0 END) AS \"NoCost\" FROM \"MTC_CA_R_GOODS_OUT\" WHERE \"RunId\" = CAST(? AS BIGINT) GROUP BY IFNULL(\"CustType\", ''), \"IsSample\" ORDER BY 1, 2"
+    },
+    "apAccr": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 G.\"ObjType\", COALESCE(D.\"DocNum\", R.\"DocNum\") AS \"DocNum\", G.\"DocEntry\", G.\"LineNum\", G.\"DocDate\", G.\"CardCode\", G.\"AccrType\", G.\"ItemCode\", G.\"DocQty\", G.\"InvQty\", G.\"RetQty\", G.\"OpenQty\", G.\"UnitPrice\", G.\"OpenAmt\" FROM \"MTC_CA_R_AP_ACCR\" G LEFT JOIN \"OPDN\" D ON G.\"ObjType\" = '20' AND D.\"DocEntry\" = G.\"DocEntry\" LEFT JOIN \"ORPD\" R ON G.\"ObjType\" = '21' AND R.\"DocEntry\" = G.\"DocEntry\" WHERE G.\"RunId\" = CAST(? AS BIGINT) AND (? = '' OR G.\"CardCode\" LIKE ? || '%' OR G.\"ItemCode\" LIKE ? || '%') ORDER BY G.\"CardCode\", G.\"DocDate\", G.\"DocEntry\", G.\"LineNum\""
+    },
+    "apAccrSum": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT IFNULL(\"AccrType\", '') AS \"AccrType\", COUNT(*) AS \"Lines\", COUNT(DISTINCT \"CardCode\") AS \"Vendors\", SUM(\"OpenAmt\") AS \"OpenAmt\" FROM \"MTC_CA_R_AP_ACCR\" WHERE \"RunId\" = CAST(? AS BIGINT) GROUP BY IFNULL(\"AccrType\", '') ORDER BY 1"
+    },
+    "explainItem": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode",
+        "runId",
+        "itemCode"
+      ],
+      "sql": "SELECT 1 AS \"Seq\", '期初' AS \"Sec\", '' AS \"TransCode\", '' AS \"TransName\", '' AS \"RuleId\", CAST(NULL AS INT) AS \"Lines\", \"OpenQty\" AS \"Qty\", \"OpenMat\" AS \"MatAmt\", \"OpenMfg\" AS \"MfgAmt\", \"OpenLab\" AS \"LabAmt\", \"OpenSub\" AS \"SubAmt\", \"OpenMat\" + \"OpenMfg\" + \"OpenLab\" + \"OpenSub\" AS \"Amount\", '' AS \"Note\" FROM \"MTC_CA_R_ITEM\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"ItemCode\" = ? UNION ALL SELECT CASE WHEN L.\"InVal\" = 'Y' THEN 2 WHEN S.\"Dir\" = 'I' OR (L.\"Qty\" = 0 AND S.\"Dir\" IS NULL) THEN 4 ELSE 5 END, CASE WHEN L.\"InVal\" = 'Y' THEN '计入加权单价的入库' WHEN S.\"Dir\" = 'I' OR (L.\"Qty\" = 0 AND S.\"Dir\" IS NULL) THEN '不计入单价的入库 / 调整' ELSE '出库（按单价计价）' END, IFNULL(L.\"TransCode\", ''), IFNULL(MAX(T.\"Name\"), ''), IFNULL(L.\"RuleId\", ''), COUNT(*), SUM(L.\"Qty\"), SUM(L.\"MatAmt\"), SUM(L.\"MfgAmt\"), SUM(L.\"LabAmt\"), SUM(L.\"SubAmt\"), SUM(L.\"Amount\"), MAX(L.\"Cat\") FROM \"MTC_CA_R_LINE\" L JOIN \"MTC_CA_S_LINE\" S ON S.\"RunId\" = L.\"RunId\" AND S.\"LineId\" = L.\"LineId\" LEFT JOIN \"@MTC_COST_IOTYPE\" T ON T.\"Code\" = L.\"TransCode\" WHERE L.\"RunId\" = CAST(? AS BIGINT) AND L.\"ItemCode\" = ? GROUP BY CASE WHEN L.\"InVal\" = 'Y' THEN 2 WHEN S.\"Dir\" = 'I' OR (L.\"Qty\" = 0 AND S.\"Dir\" IS NULL) THEN 4 ELSE 5 END, CASE WHEN L.\"InVal\" = 'Y' THEN '计入加权单价的入库' WHEN S.\"Dir\" = 'I' OR (L.\"Qty\" = 0 AND S.\"Dir\" IS NULL) THEN '不计入单价的入库 / 调整' ELSE '出库（按单价计价）' END, L.\"TransCode\", L.\"RuleId\" UNION ALL SELECT 3, '加权单价 =（期初 + 计入单价的入库）÷ 数量', '', '', \"PriceSrc\", NULL, NULL, \"PMat\", \"PMfg\", \"PLab\", \"PSub\", \"PMat\" + \"PMfg\" + \"PLab\" + \"PSub\", IFNULL(\"Flags\", '') FROM \"MTC_CA_R_ITEM\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"ItemCode\" = ? UNION ALL SELECT 5, '零库存尾差结转（JZ04）', '', '', 'TAIL-01', NULL, 0, NULL, NULL, NULL, NULL, \"TailAmt\", '期末数量 0，尾差在 ±TAIL_MAX 以内，结转到 TAIL_ADJ 科目（已计入出库）' FROM \"MTC_CA_R_ITEM\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"ItemCode\" = ? AND \"TailAmt\" <> 0 UNION ALL SELECT 6, '期末', '', '', '', NULL, \"EndQty\", \"EndMat\", \"EndMfg\", \"EndLab\", \"EndSub\", \"EndAmount\", '' FROM \"MTC_CA_R_ITEM\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"ItemCode\" = ? ORDER BY 1, 3, 5"
+    },
+    "orderExplain": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry",
+        "runId",
+        "orderType",
+        "orderEntry"
+      ],
+      "sql": "SELECT 1 AS \"Seq\", '期初在产品（以前各期领料 − 已结转）' AS \"Sec\", SUM(\"OpenIssMat\" - \"OpenCarMat\") AS \"MatAmt\", SUM(\"OpenIssMfg\" - \"OpenCarMfg\") AS \"MfgAmt\", SUM(\"OpenIssLab\" - \"OpenCarLab\") AS \"LabAmt\", SUM(\"OpenIssSub\" - \"OpenCarSub\") AS \"SubAmt\", SUM(\"OpenIssMat\" - \"OpenCarMat\" + \"OpenIssMfg\" - \"OpenCarMfg\" + \"OpenIssLab\" - \"OpenCarLab\" + \"OpenIssSub\" - \"OpenCarSub\") AS \"Amount\" FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 2, '本期领料', SUM(\"IssMat\"), SUM(\"IssMfg\"), SUM(\"IssLab\"), SUM(\"IssSub\"), SUM(\"IssMat\" + \"IssMfg\" + \"IssLab\" + \"IssSub\") FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) AND \"ItemCode\" <> '#SUBFEE' UNION ALL SELECT 3, '本期委外加工费（来源见“委外加工费”页）', SUM(\"IssMat\"), SUM(\"IssMfg\"), SUM(\"IssLab\"), SUM(\"IssSub\"), SUM(\"IssMat\" + \"IssMfg\" + \"IssLab\" + \"IssSub\") FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) AND \"ItemCode\" = '#SUBFEE' UNION ALL SELECT 4, '本期结转（累计领料 × 结转比例 − 以前已结转）', SUM(\"CarMat\"), SUM(\"CarMfg\"), SUM(\"CarLab\"), SUM(\"CarSub\"), SUM(\"CarMat\" + \"CarMfg\" + \"CarLab\" + \"CarSub\") FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 8, '关单差异（本期关单时剩余在产品）', SUM(\"ClsMat\"), SUM(\"ClsMfg\"), SUM(\"ClsLab\"), SUM(\"ClsSub\"), SUM(\"ClsMat\" + \"ClsMfg\" + \"ClsLab\" + \"ClsSub\") FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 9, '期末在产品', SUM(\"WipMat\"), SUM(\"WipMfg\"), SUM(\"WipLab\"), SUM(\"WipSub\"), SUM(\"WipMat\" + \"WipMfg\" + \"WipLab\" + \"WipSub\") FROM \"MTC_CA_R_ORDER_MAT\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 5, '分摊的制造费用、人工（单位工时 × 本期入库数）', 0, \"AllocMfg\", \"AllocLab\", 0, \"AllocMfg\" + \"AllocLab\" FROM \"MTC_CA_R_ORDER\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 6, '本期完工成本 = 结转 + 分摊', \"CostMat\", \"CostMfg\", \"CostLab\", \"CostSub\", \"CostAmt\" FROM \"MTC_CA_R_ORDER\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) UNION ALL SELECT 7, '单位成本 = 完工成本 ÷ 本期完工数', NULL, NULL, NULL, NULL, \"UnitCost\" FROM \"MTC_CA_R_ORDER\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"OrderType\" = ? AND \"OrderEntry\" = CAST(? AS INTEGER) ORDER BY 1"
+    },
+    "kpiTotals": {
+      "kind": "query",
+      "params": [
+        "runId"
+      ],
+      "sql": "SELECT \"KpiType\", \"Value\" FROM \"MTC_CA_RUN_KPI\" WHERE \"RunId\" = CAST(? AS BIGINT) AND \"KeyCode\" = '' ORDER BY \"KpiType\""
+    },
+    "kpiCmpSummary": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "runId2"
+      ],
+      "sql": "SELECT \"KpiType\", COUNT(*) AS \"Cnt\", SUM(CASE WHEN ABS(\"Diff\") > 0.005 THEN 1 ELSE 0 END) AS \"DiffCnt\", SUM(ABS(\"Diff\")) AS \"AbsDiff\" FROM (SELECT IFNULL(A.\"KpiType\", B.\"KpiType\") AS \"KpiType\", IFNULL(A.\"KeyCode\", B.\"KeyCode\") AS \"KeyCode\", B.\"Value\" AS \"ValB\", A.\"Value\" AS \"ValA\", IFNULL(A.\"Value\", 0) - IFNULL(B.\"Value\", 0) AS \"Diff\" FROM (SELECT * FROM \"MTC_CA_RUN_KPI\" WHERE \"RunId\" = CAST(? AS BIGINT)) A FULL OUTER JOIN (SELECT * FROM \"MTC_CA_RUN_KPI\" WHERE \"RunId\" = CAST(? AS BIGINT)) B ON B.\"KpiType\" = A.\"KpiType\" AND B.\"KeyCode\" = A.\"KeyCode\") GROUP BY \"KpiType\" ORDER BY \"KpiType\""
+    },
+    "kpiCmpList": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "runId2",
+        "kind",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 K.\"KeyCode\", COALESCE(TO_NVARCHAR(W.\"DocNum\"), TO_NVARCHAR(M.\"DocNum\")) AS \"OrderNum\", K.\"ValB\", K.\"ValA\", K.\"Diff\" FROM (SELECT IFNULL(A.\"KpiType\", B.\"KpiType\") AS \"KpiType\", IFNULL(A.\"KeyCode\", B.\"KeyCode\") AS \"KeyCode\", B.\"Value\" AS \"ValB\", A.\"Value\" AS \"ValA\", IFNULL(A.\"Value\", 0) - IFNULL(B.\"Value\", 0) AS \"Diff\" FROM (SELECT * FROM \"MTC_CA_RUN_KPI\" WHERE \"RunId\" = CAST(? AS BIGINT)) A FULL OUTER JOIN (SELECT * FROM \"MTC_CA_RUN_KPI\" WHERE \"RunId\" = CAST(? AS BIGINT)) B ON B.\"KpiType\" = A.\"KpiType\" AND B.\"KeyCode\" = A.\"KeyCode\") K LEFT JOIN \"OWOR\" W ON W.\"DocEntry\" = CASE WHEN K.\"KpiType\" LIKE 'ORDER%' AND K.\"KeyCode\" LIKE_REGEXPR '^202-[0-9]+$' THEN TO_INTEGER(SUBSTR_AFTER(K.\"KeyCode\", '-')) END LEFT JOIN \"@MTC_OWOR\" M ON M.\"DocEntry\" = CASE WHEN K.\"KpiType\" LIKE 'ORDER%' AND K.\"KeyCode\" LIKE_REGEXPR '^MTC_OWOR-[0-9]+$' THEN TO_INTEGER(SUBSTR_AFTER(K.\"KeyCode\", '-')) END WHERE K.\"KpiType\" = ? AND ABS(K.\"Diff\") > 0.005 AND (? = '' OR K.\"KeyCode\" LIKE ? || '%') ORDER BY ABS(K.\"Diff\") DESC"
+    },
+    "scenOvr": {
+      "kind": "query",
+      "params": [
+        "scenCode"
+      ],
+      "sql": "SELECT \"LineNo\", \"OvrType\", \"KeyCode\", \"Value\", \"Descr\" FROM \"MTC_CA_C_SCENARIO_OVR\" WHERE \"Scenario\" = ? ORDER BY \"LineNo\""
+    },
+    "metaTables": {
+      "kind": "query",
+      "params": [
+        "text",
+        "text",
+        "text",
+        "text",
+        "text"
+      ],
+      "sql": "SELECT \"TableName\", \"Layer\", \"Descr\", \"Source\" FROM \"MTC_CA_M_TABLE\" WHERE \"InDb\" = 'Y' AND (? = '' OR UPPER(\"TableName\") LIKE '%' || UPPER(?) || '%' OR \"Descr\" LIKE '%' || ? || '%' OR \"Source\" LIKE '%' || ? || '%' OR \"TableName\" IN (SELECT \"TableName\" FROM \"MTC_CA_M_COLUMN\" WHERE \"Descr\" LIKE '%' || ? || '%')) ORDER BY CASE \"Layer\" WHEN 'RUN' THEN 1 WHEN 'C' THEN 2 WHEN 'M' THEN 3 WHEN 'S' THEN 4 WHEN 'R' THEN 5 WHEN 'B1' THEN 7 ELSE 6 END, \"TableName\""
+    },
+    "metaColumns": {
+      "kind": "query",
+      "params": [
+        "tableName"
+      ],
+      "sql": "SELECT \"ColumnName\", \"DataType\", \"Descr\" FROM \"MTC_CA_M_COLUMN\" WHERE \"TableName\" = ? AND \"InDb\" = 'Y' ORDER BY \"Position\""
+    },
+    "metaAllColumns": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"TableName\", \"ColumnName\", \"DataType\", \"Descr\" FROM \"MTC_CA_M_COLUMN\" WHERE \"InDb\" = 'Y' ORDER BY \"TableName\", \"Position\""
+    },
+    "metaRules": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"RuleId\", \"Scene\", \"Title\", \"Descr\", \"Basis\" FROM \"MTC_CA_C_RULE\" ORDER BY \"RuleId\""
+    },
+    "metaChecks": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"CheckId\", \"Stage\", \"Title\", \"Purpose\", \"IsBlock\", \"Scene\" FROM \"MTC_CA_C_CHECK\" ORDER BY \"Stage\" DESC, \"SortNo\", \"CheckId\""
+    },
+    "metaTools": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"ToolName\", \"Title\", \"Descr\", \"ProcName\", \"IsWrite\", \"NeedConfirm\", \"ModelOutput\" FROM \"MTC_CA_C_TOOL\" WHERE \"Active\" = 'Y' ORDER BY \"ToolName\""
+    },
+    "metaParams": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"ParamCode\", \"FromFc\", \"ToFc\", \"Value\", \"Descr\" FROM \"MTC_CA_C_PARAM\" ORDER BY \"ParamCode\", \"FromFc\""
+    },
+    "metaAccts": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT \"Usage\", \"FromFc\", \"ToFc\", \"AcctCode\", \"Descr\" FROM \"MTC_CA_C_ACCT\" ORDER BY \"Usage\", \"FromFc\""
+    },
+    "metaPools": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT '池' AS \"Kind\", \"PoolCode\", \"PoolName\" AS \"Key\", \"IsDefault\" AS \"Val\", \"Descr\" FROM \"MTC_CA_C_POOL\" UNION ALL SELECT '来源', \"PoolCode\", \"OcrCode\", \"FromFc\" || '~' || \"ToFc\", \"Descr\" FROM \"MTC_CA_C_POOL_SRC\" UNION ALL SELECT '范围', \"PoolCode\", \"MatchBy\" || ':' || \"ItmsGrpCod\", \"WorTypes\", \"Descr\" FROM \"MTC_CA_C_POOL_TGT\" ORDER BY 2, 1, 3"
+    },
+    "b1Pool": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TRIM(P.\"Code\") AS \"PoolCode\", P.\"Name\" AS \"PoolName\", IFNULL(P.\"U_IsDefault\", 'N') AS \"IsDefault\", IFNULL(P.\"U_IsCloseDif\", 'N') AS \"IsCloseDif\", (SELECT COUNT(*) FROM \"@MTC_CA_POOL1\" X WHERE X.\"Code\" = P.\"Code\" AND IFNULL(TRIM(X.\"U_OcrCode\"), '') <> '') AS \"SrcCnt\", (SELECT COUNT(*) FROM \"@MTC_CA_POOL2\" X WHERE X.\"Code\" = P.\"Code\" AND IFNULL(TRIM(X.\"U_MatchVal\"), '') <> '') AS \"TgtCnt\", P.\"U_Descr\" AS \"Descr\" FROM \"@MTC_CA_POOL\" P ORDER BY 1"
+    },
+    "b1PoolSrc": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TRIM(X.\"Code\") AS \"PoolCode\", X.\"LineId\" AS \"LineNo\", X.\"U_OcrCode\" AS \"OcrCode\", CASE WHEN O.\"PrcCode\" IS NOT NULL THEN O.\"PrcName\" WHEN K.\"Cnt\" IS NOT NULL THEN '成本计入类型（U_CalType）：' || TO_NVARCHAR(K.\"Cnt\") || ' 个成本中心' ELSE '（OPRC 中没有这个成本中心或成本计入类型）' END AS \"OcrName\", X.\"U_FromFc\" AS \"FromFc\", X.\"U_ToFc\" AS \"ToFc\", X.\"U_Descr\" AS \"Descr\" FROM \"@MTC_CA_POOL1\" X LEFT JOIN \"OPRC\" O ON O.\"PrcCode\" = TRIM(X.\"U_OcrCode\") LEFT JOIN (SELECT TRIM(\"U_CalType\") AS \"CalType\", COUNT(*) AS \"Cnt\" FROM \"OPRC\" WHERE IFNULL(TRIM(\"U_CalType\"), '') <> '' GROUP BY TRIM(\"U_CalType\")) K ON K.\"CalType\" = TRIM(X.\"U_OcrCode\") ORDER BY 1, 2"
+    },
+    "b1PoolTgt": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TRIM(X.\"Code\") AS \"PoolCode\", X.\"LineId\" AS \"LineNo\", UPPER(IFNULL(NULLIF(TRIM(X.\"U_MatchBy\"), ''), 'GRPTYPE')) AS \"MatchBy\", X.\"U_MatchVal\" AS \"MatchVal\", CASE WHEN UPPER(IFNULL(NULLIF(TRIM(X.\"U_MatchBy\"), ''), 'GRPTYPE')) = 'GRP' THEN IFNULL(B.\"ItmsGrpNam\", '（没有这个物料组）') ELSE IFNULL(TO_NVARCHAR(G.\"Cnt\") || ' 个物料组', '（没有物料组的车间类别是它）') END AS \"MatchName\", IFNULL(NULLIF(TRIM(X.\"U_WorTypes\"), ''), '10,20,30,40') AS \"WorTypes\", X.\"U_FromFc\" AS \"FromFc\", X.\"U_ToFc\" AS \"ToFc\", X.\"U_Descr\" AS \"Descr\" FROM \"@MTC_CA_POOL2\" X LEFT JOIN \"OITB\" B ON TO_NVARCHAR(B.\"ItmsGrpCod\") = TRIM(X.\"U_MatchVal\") LEFT JOIN (SELECT TRIM(\"U_ItemGrpType\") AS \"GrpType\", COUNT(*) AS \"Cnt\" FROM \"OITB\" WHERE IFNULL(TRIM(\"U_ItemGrpType\"), '') <> '' GROUP BY TRIM(\"U_ItemGrpType\")) G ON G.\"GrpType\" = TRIM(X.\"U_MatchVal\") ORDER BY 1, 2"
+    },
+    "ocrPool": {
+      "kind": "query",
+      "params": [
+        "fc"
+      ],
+      "sql": "SELECT O.\"PrcCode\" AS \"OcrCode\", O.\"PrcName\" AS \"OcrName\", O.\"DimCode\", IFNULL(TRIM(O.\"U_CalType\"), '') AS \"CalType\", O.\"Active\", IFNULL(S.\"PoolCode\", D.\"PoolCode\") AS \"PoolCode\", C.\"PoolName\", CASE WHEN S.\"PoolCode\" IS NOT NULL AND S.\"Descr\" LIKE 'OPRC.U\\_CalType=%' ESCAPE '\\' THEN '按成本计入类型' WHEN S.\"PoolCode\" IS NOT NULL THEN '单独配置' WHEN IFNULL(TRIM(O.\"U_CalType\"), '') <> '' THEN '默认池（成本计入类型 ' || TRIM(O.\"U_CalType\") || ' 没有配置）' ELSE '默认池' END AS \"Basis\" FROM \"OPRC\" O LEFT JOIN \"MTC_CA_C_POOL_SRC\" S ON S.\"OcrCode\" = O.\"PrcCode\" AND ? BETWEEN S.\"FromFc\" AND S.\"ToFc\" CROSS JOIN (SELECT MAX(\"PoolCode\") AS \"PoolCode\" FROM \"MTC_CA_C_POOL\" WHERE \"IsDefault\" = 'Y') D LEFT JOIN \"MTC_CA_C_POOL\" C ON C.\"PoolCode\" = IFNULL(S.\"PoolCode\", D.\"PoolCode\") ORDER BY 6, O.\"DimCode\", 1"
+    },
+    "cfgSync": {
+      "kind": "query",
+      "params": [],
+      "sql": "SELECT TOP 1 \"RunId\", \"Status\", \"EndTime\", \"Msg\" FROM \"MTC_CA_RUN_STEP\" WHERE \"StepCode\" = 'P05' AND \"Status\" <> 'RUNNING' ORDER BY \"RunId\" DESC"
+    },
+    "b1ExpSet": {
+      "kind": "query",
+      "params": [
+        "fc"
+      ],
+      "sql": "SELECT TRIM(E.\"Code\") AS \"ParamCode\", E.\"Name\" AS \"Descr\", E1.\"U_FromFc\" AS \"FromFc\", E1.\"U_ToFc\" AS \"ToFc\", E1.\"U_Value\" AS \"Value\", CASE WHEN E1.\"Code\" IS NULL THEN '' WHEN ? BETWEEN IFNULL(NULLIF(TRIM(E1.\"U_FromFc\"), ''), '0000-00') AND IFNULL(NULLIF(TRIM(E1.\"U_ToFc\"), ''), '9999-99') THEN 'Y' ELSE '' END AS \"InFc\" FROM \"@MTC_CA_EXPSET\" E LEFT JOIN \"@MTC_CA_EXPSET1\" E1 ON E1.\"Code\" = E.\"Code\" ORDER BY 1, 3"
+    },
+    "cfgEffective": {
+      "kind": "query",
+      "params": [
+        "fc",
+        "fc"
+      ],
+      "sql": "SELECT \"ParamCode\", \"Value\", CASE WHEN \"Descr\" LIKE '%B1 @MTC_CA_%' THEN 'B1' ELSE '种子值' END AS \"Src\", \"FromFc\", \"ToFc\", \"Descr\" FROM \"MTC_CA_C_PARAM\" WHERE ? BETWEEN \"FromFc\" AND \"ToFc\" UNION ALL SELECT \"Usage\", \"AcctCode\", CASE WHEN \"Descr\" LIKE '%B1 @MTC_CA_%' THEN 'B1' ELSE '种子值' END, \"FromFc\", \"ToFc\", \"Descr\" FROM \"MTC_CA_C_ACCT\" WHERE \"Usage\" IN ('MFG_EXP_PREFIX', 'LAB_EXP') AND ? BETWEEN \"FromFc\" AND \"ToFc\" ORDER BY 3, 1"
+    },
+    "b1Qcp": {
+      "kind": "query",
+      "params": [
+        "fc",
+        "q",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"DocNum\", \"LineNo\", \"ItemCode\", \"ItemName\", \"ItmsGrpCod\", \"Price\", CASE WHEN \"Canceled\" <> 'N' THEN '已取消，不使用' WHEN IFNULL(\"Price\", 0) = 0 THEN '单价为 0，不使用' WHEN \"VCnt\" = 1 THEN '使用' WHEN \"Price\" = \"VMax\" THEN '重复维护，使用这一行（取最大值）' ELSE '重复维护，不使用（取最大值）' END AS \"Used\", \"Note\" FROM (SELECT T0.\"DocNum\", T1.\"LineId\" AS \"LineNo\", T1.\"U_ItemCode\" AS \"ItemCode\", T1.\"U_ItemName\" AS \"ItemName\", T1.\"U_ItmsGrpCod\" AS \"ItmsGrpCod\", T1.\"U_Price\" AS \"Price\", IFNULL(T0.\"Canceled\", 'N') AS \"Canceled\", IFNULL(T1.\"U_LineMemo\", T0.\"U_Memo\") AS \"Note\", SUM(CASE WHEN IFNULL(T0.\"Canceled\", 'N') = 'N' AND IFNULL(T1.\"U_Price\", 0) <> 0 THEN 1 ELSE 0 END) OVER (PARTITION BY T1.\"U_ItemCode\") AS \"VCnt\", MAX(CASE WHEN IFNULL(T0.\"Canceled\", 'N') = 'N' AND IFNULL(T1.\"U_Price\", 0) <> 0 THEN T1.\"U_Price\" END) OVER (PARTITION BY T1.\"U_ItemCode\") AS \"VMax\" FROM \"@MTC_COST_QCPRICE\" T0 JOIN \"@MTC_COST_QCPRICE1\" T1 ON T1.\"DocEntry\" = T0.\"DocEntry\" WHERE T0.\"U_FcCode\" = ? AND T1.\"U_ItemCode\" IS NOT NULL AND (? = '' OR T1.\"U_ItemCode\" LIKE ? || '%' OR T1.\"U_ItmsGrpCod\" = ?)) X ORDER BY \"ItemCode\", \"DocNum\", \"LineNo\""
+    },
+    "b1Time": {
+      "kind": "query",
+      "params": [
+        "fc",
+        "q",
+        "q"
+      ],
+      "sql": "SELECT TOP 2001 \"DocNum\", \"LineNo\", \"ItemCode\", \"ItemName\", \"Hours\", CASE WHEN \"Canceled\" <> 'N' THEN '已取消，不使用' WHEN \"VCnt\" > 1 AND \"Hours\" = \"VMax\" THEN '重复维护，使用这一行（取最大值）' WHEN \"VCnt\" > 1 THEN '重复维护，不使用（取最大值）' WHEN IFNULL(\"Hours\", 0) = 0 THEN '工时为 0，分不到费用' ELSE '使用' END AS \"Used\", \"Note\" FROM (SELECT T0.\"DocNum\", T1.\"LineId\" AS \"LineNo\", T1.\"U_ItemCode\" AS \"ItemCode\", T1.\"U_ItemName\" AS \"ItemName\", T1.\"U_Time\" AS \"Hours\", IFNULL(T0.\"Canceled\", 'N') AS \"Canceled\", T1.\"U_Memo\" AS \"Note\", SUM(CASE WHEN IFNULL(T0.\"Canceled\", 'N') = 'N' THEN 1 ELSE 0 END) OVER (PARTITION BY T1.\"U_ItemCode\") AS \"VCnt\", MAX(CASE WHEN IFNULL(T0.\"Canceled\", 'N') = 'N' THEN T1.\"U_Time\" END) OVER (PARTITION BY T1.\"U_ItemCode\") AS \"VMax\" FROM \"@MTC_COST_TIME\" T0 JOIN \"@MTC_COST_TIME1\" T1 ON T1.\"DocEntry\" = T0.\"DocEntry\" WHERE T0.\"U_FcCode\" = ? AND T1.\"U_ItemCode\" IS NOT NULL AND (? = '' OR T1.\"U_ItemCode\" LIKE ? || '%')) X ORDER BY \"ItemCode\", \"DocNum\", \"LineNo\""
+    },
+    "doPrecheck": {
+      "kind": "call",
+      "params": [
+        "fc",
+        "runType",
+        "scenario",
+        "user"
+      ],
+      "title": "计算前检查",
+      "sql": "CALL \"MTC_CA_P_PRECHECK\"(?, ?, ?, ?, 'USER')"
+    },
+    "scenSave": {
+      "kind": "exec",
+      "params": [
+        "scenCode",
+        "title",
+        "descr",
+        "user"
+      ],
+      "sql": "CALL \"MTC_CA_P_SCEN_SAVE\"(?, ?, ?, ?)"
+    },
+    "scenDel": {
+      "kind": "exec",
+      "params": [
+        "scenCode"
+      ],
+      "sql": "CALL \"MTC_CA_P_SCEN_DEL\"(?)"
+    },
+    "scenOvrSave": {
+      "kind": "exec",
+      "params": [
+        "scenCode",
+        "lineNo",
+        "ovrType",
+        "keyCode",
+        "pct",
+        "descr"
+      ],
+      "sql": "CALL \"MTC_CA_P_SCEN_OVR_SAVE\"(?, CAST(? AS INT), ?, ?, CAST(? AS DECIMAL(19,6)), ?)"
+    },
+    "scenOvrDel": {
+      "kind": "exec",
+      "params": [
+        "scenCode",
+        "lineNo"
+      ],
+      "sql": "CALL \"MTC_CA_P_SCEN_OVR_DEL\"(?, CAST(? AS INT))"
+    },
+    "codeKind": {
+      "kind": "query",
+      "params": [
+        "itemCode",
+        "itemCode",
+        "itemCode",
+        "itemCode",
+        "itemCode"
+      ],
+      "sql": "SELECT 'ITEM' AS \"Kind\" FROM \"OITM\" WHERE \"ItemCode\" = ? UNION ALL SELECT 'BP' FROM \"OCRD\" WHERE \"CardCode\" = ? UNION ALL SELECT 'ORDER' FROM \"OWOR\" WHERE TO_NVARCHAR(\"DocNum\") = ? UNION ALL SELECT 'ORDER' FROM \"@MTC_OWOR\" WHERE TO_NVARCHAR(\"DocNum\") = ? UNION ALL SELECT 'POOL' FROM \"MTC_CA_C_POOL\" WHERE \"PoolCode\" = ?"
+    },
+    "doRun": {
+      "kind": "call",
+      "params": [
+        "fc",
+        "runType",
+        "scenario",
+        "user"
+      ],
+      "title": "成本计算",
+      "sql": "CALL \"MTC_CA_P_RUN\"(?, ?, ?, ?, 'USER')",
+      "confirm": "runTypeF"
+    },
+    "doBoot": {
+      "kind": "call",
+      "params": [
+        "fc"
+      ],
+      "title": "期初承接",
+      "sql": "CALL \"MTC_CA_P_BOOTSTRAP\"(?)",
+      "confirm": "always"
+    },
+    "tb": {
+      "kind": "query",
+      "params": [
+        "fc",
+        "runId"
+      ],
+      "sql": "SELECT A.\"Cat\", A.\"AcctCode\", A.\"AcctName\", CASE WHEN B.\"Beg\" > 0 THEN B.\"Beg\" END AS \"BegDr\", CASE WHEN B.\"Beg\" < 0 THEN -B.\"Beg\" END AS \"BegCr\", B.\"CurDr\", B.\"CurCr\", CASE WHEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" > 0 THEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" END AS \"EndDr\", CASE WHEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" < 0 THEN -(B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\") END AS \"EndCr\", B.\"PendDr\", B.\"PendCr\", CASE WHEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" + B.\"PendDr\" - B.\"PendCr\" > 0 THEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" + B.\"PendDr\" - B.\"PendCr\" END AS \"AllDr\", CASE WHEN B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" + B.\"PendDr\" - B.\"PendCr\" < 0 THEN -(B.\"Beg\" + B.\"CurDr\" - B.\"CurCr\" + B.\"PendDr\" - B.\"PendCr\") END AS \"AllCr\" FROM \"MTC_CA_F_TB_ACCT\"(?) A JOIN (SELECT \"AcctCode\", IFNULL(SUM(CASE WHEN \"Src\" = 'BEG' THEN \"Debit\" - \"Credit\" END), 0) AS \"Beg\", IFNULL(SUM(CASE WHEN \"Src\" = 'GL' THEN \"Debit\" END), 0) AS \"CurDr\", IFNULL(SUM(CASE WHEN \"Src\" = 'GL' THEN \"Credit\" END), 0) AS \"CurCr\", IFNULL(SUM(CASE WHEN \"Src\" IN ('VCH', 'DRAFT') AND \"Dup\" = 'N' THEN \"Debit\" END), 0) AS \"PendDr\", IFNULL(SUM(CASE WHEN \"Src\" IN ('VCH', 'DRAFT') AND \"Dup\" = 'N' THEN \"Credit\" END), 0) AS \"PendCr\" FROM \"MTC_CA_F_TB_LINE\"(CAST(? AS BIGINT), '') GROUP BY \"AcctCode\") B ON B.\"AcctCode\" = A.\"AcctCode\" WHERE B.\"Beg\" <> 0 OR B.\"CurDr\" <> 0 OR B.\"CurCr\" <> 0 OR B.\"PendDr\" <> 0 OR B.\"PendCr\" <> 0 ORDER BY A.\"AcctCode\""
+    },
+    "tbAcctSum": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "acct"
+      ],
+      "sql": "SELECT L.\"Src\", L.\"TransCode\", L.\"RevOf\", C.\"TrnsCodDsc\" AS \"TransName\", COUNT(*) AS \"Lines\", SUM(L.\"Debit\") AS \"Debit\", SUM(L.\"Credit\") AS \"Credit\" FROM \"MTC_CA_F_TB_LINE\"(CAST(? AS BIGINT), ?) L LEFT JOIN \"OTRC\" C ON C.\"TrnsCode\" = L.\"TransCode\" WHERE L.\"Src\" <> 'BEG' AND L.\"Dup\" = 'N' GROUP BY L.\"Src\", L.\"TransCode\", L.\"RevOf\", C.\"TrnsCodDsc\" ORDER BY CASE L.\"Src\" WHEN 'GL' THEN 1 WHEN 'VCH' THEN 2 ELSE 3 END, L.\"TransCode\", L.\"RevOf\""
+    },
+    "tbLedger": {
+      "kind": "query",
+      "params": [
+        "runId",
+        "acct",
+        "q",
+        "q"
+      ],
+      "sql": "WITH L AS (SELECT CASE \"Src\" WHEN 'BEG' THEN 0 WHEN 'GL' THEN 1 WHEN 'VCH' THEN 3 ELSE 4 END AS \"Kind\", T.* FROM \"MTC_CA_F_TB_LINE\"(CAST(? AS BIGINT), ?) T), W AS (SELECT L.*, SUM(CASE WHEN \"Dup\" = 'Y' THEN 0 ELSE \"Debit\" - \"Credit\" END) OVER (ORDER BY \"Kind\", \"RefDate\", \"TransId\", \"LineId\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS \"Bal\" FROM L), T AS (SELECT 2 AS \"Kind\", '本期合计 / 期末余额（已过账）' AS \"Memo\", IFNULL(SUM(CASE WHEN \"Kind\" = 1 THEN \"Debit\" END), 0) AS \"Debit\", IFNULL(SUM(CASE WHEN \"Kind\" = 1 THEN \"Credit\" END), 0) AS \"Credit\", IFNULL(SUM(CASE WHEN \"Kind\" <= 1 THEN \"Debit\" - \"Credit\" END), 0) AS \"Bal\" FROM L UNION ALL SELECT 5, '未过账合计 / 含未过账期末余额', IFNULL(SUM(CASE WHEN \"Kind\" >= 3 AND \"Dup\" = 'N' THEN \"Debit\" END), 0), IFNULL(SUM(CASE WHEN \"Kind\" >= 3 AND \"Dup\" = 'N' THEN \"Credit\" END), 0), IFNULL(SUM(CASE WHEN \"Dup\" = 'N' THEN \"Debit\" - \"Credit\" END), 0) FROM L) SELECT TOP 2001 X.\"Kind\", X.\"RefDate\", X.\"Src\", X.\"DocNo\", X.\"TransId\", X.\"LineId\", X.\"TransCode\", C.\"TrnsCodDsc\" AS \"TransName\", X.\"RevOf\", X.\"ObjType\", X.\"BaseRef\", X.\"Memo\", X.\"OcrCode\", X.\"VendorCode\", X.\"Debit\", X.\"Credit\", CASE WHEN X.\"Bal\" > 0 THEN '借' WHEN X.\"Bal\" < 0 THEN '贷' ELSE '平' END AS \"Dir\", ABS(X.\"Bal\") AS \"Balance\" FROM (SELECT \"Kind\", \"RefDate\", \"Src\", \"DocNo\", \"TransId\", \"LineId\", \"TransCode\", \"ObjType\", \"BaseRef\", \"Memo\", \"OcrCode\", \"VendorCode\", \"Debit\", \"Credit\", \"Bal\", \"RevOf\" FROM W WHERE \"Kind\" = 0 OR ? = '' OR \"TransCode\" = ? UNION ALL SELECT \"Kind\", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \"Memo\", NULL, NULL, \"Debit\", \"Credit\", \"Bal\", NULL FROM T) X LEFT JOIN \"OTRC\" C ON C.\"TrnsCode\" = X.\"TransCode\" ORDER BY X.\"Kind\", X.\"RefDate\", X.\"TransId\", X.\"LineId\""
+    },
+    "tbVoucher": {
+      "kind": "query",
+      "params": [
+        "transId"
+      ],
+      "sql": "SELECT J.\"Line_ID\", J.\"Account\" AS \"AcctCode\", J.\"Debit\", J.\"Credit\", J.\"ProfitCode\" AS \"OcrCode\", J.\"Project\", J.\"U_VendorCode\" AS \"VendorCode\", J.\"LineMemo\" AS \"Memo\" FROM \"JDT1\" J WHERE J.\"TransId\" = CAST(? AS INTEGER) ORDER BY J.\"Line_ID\""
+    }
+  }
+}

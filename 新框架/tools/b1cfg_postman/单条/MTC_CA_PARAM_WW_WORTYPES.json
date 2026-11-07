@@ -1,0 +1,8 @@
+{
+  "Code": "WW_WORTYPES",
+  "Name": "委外工单的订单类型",
+  "U_Category": "业务口径",
+  "U_Value": "50",
+  "U_DataType": "列表",
+  "U_Hint": "U_OrdType 逗号分隔，如 50；改了要同步改费用池分摊范围的订单类型"
+}

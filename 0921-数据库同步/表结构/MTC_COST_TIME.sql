@@ -1,0 +1,6 @@
+CREATE COLUMN TABLE "FH100"."MTC_COST_TIME" (
+    "BPLId" INTEGER,
+    "FcCode" NVARCHAR(30),
+    "ItemCode" NVARCHAR(50),
+    "Time" DECIMAL(19,6)
+)

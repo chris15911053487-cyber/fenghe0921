@@ -1,0 +1,8 @@
+{
+  "Code": "SAMPLE_SALTYPES",
+  "Name": "样品销售的业务类型",
+  "U_Category": "业务口径",
+  "U_Value": "样品销售",
+  "U_DataType": "列表",
+  "U_Hint": "@MTC_SALORDTYPE.U_BusiType 逗号分隔，如 样品销售"
+}

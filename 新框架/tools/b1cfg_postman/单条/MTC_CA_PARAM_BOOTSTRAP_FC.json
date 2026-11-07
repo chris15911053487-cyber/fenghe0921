@@ -1,0 +1,8 @@
+{
+  "Code": "BOOTSTRAP_FC",
+  "Name": "期初承接账期",
+  "U_Category": "计算控制",
+  "U_Value": "2026-08",
+  "U_DataType": "账期",
+  "U_Hint": "YYYY-MM，从旧框架该期结果取期初。上线后不要改"
+}

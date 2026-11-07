@@ -1,0 +1,8 @@
+{
+  "Code": "PRICE_JUMP_PCT",
+  "Name": "价格波动报警比例",
+  "U_Category": "尾差与校验",
+  "U_Value": "30",
+  "U_DataType": "数字",
+  "U_Hint": "%：POST-14 价格波动 / 期末单价偏离，如 30"
+}

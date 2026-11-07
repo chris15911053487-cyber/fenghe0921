@@ -1,0 +1,8 @@
+{
+  "Code": "RECON_COSTONLY_AREAS",
+  "Name": "只比较成本凭证的对账项",
+  "U_Category": "凭证与对账",
+  "U_Value": "WIP_PROD,GOODS,WW_MAT",
+  "U_DataType": "列表",
+  "U_Hint": "可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP，逗号分隔"
+}

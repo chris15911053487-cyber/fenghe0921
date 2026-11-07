@@ -1,0 +1,8 @@
+{
+  "Code": "COST_TRANSCODES",
+  "Name": "成本模块生成的凭证代码",
+  "U_Category": "凭证与对账",
+  "U_Value": "MR01,MR02,YF01,PP01,WW01,IO01,IO02,PP04,PP05,WW03,DN01,DN02,DN03,DN04,AR03,AR04,JZ01,JZ03,JZ04,PUR1,PUR2,PUR3,PUR4,PUR5",
+  "U_DataType": "列表",
+  "U_Hint": "凭证代码逗号分隔；要和代码实际生成的一致，不要随意增删"
+}
