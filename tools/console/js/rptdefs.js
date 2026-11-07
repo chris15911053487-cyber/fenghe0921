@@ -559,6 +559,111 @@ const RPTDEFS = [
   "b1": "/* SELECT FROM \"OFPR\" T0 WHERE T0.\"Code\" = '[%0]' */\n/* SELECT FROM \"OFPR\" T1 WHERE T1.\"Code\" = '[%1]' */\n/* SELECT FROM \"OITM\" T2 WHERE T2.\"ItemCode\" = '[%2]' */\n/* SELECT FROM \"OITB\" T3 WHERE T3.\"ItmsGrpCod\" = '[%3]' */\n/* SELECT FROM \"OITM\" T5 WHERE T5.\"ItemCode\" = '[%5]' */\nCALL \"MTC_CA_RPT_05_MATUSE\"('[%0]', '[%1]', '[%2]', '[%3]', '[%4]', '[%5]', '[%6]');"
  },
  {
+  "id": "24",
+  "proc": "MTC_CA_RPT_24_OTHERUSE",
+  "name": "其他领用明细表",
+  "grp": "核算结果",
+  "desc": "与生产订单无关的其他出入库和盘点（I04 / O04 / I10 / O10），逐单据行列出成本、部门、科目、研发项目和领用申请信息。数量、金额按领用为正，入库类为负；公摊费用池有值 = 记 5101，金额进该费用池。 承接账期及以前取旧框架回填的历史运行，料工费按旧框架完工比例拆分（估算）。",
+  "params": [
+   {
+    "name": "FcFrom",
+    "label": "起始账期",
+    "type": "fc",
+    "hint": "空 = 最近一个已计算账期",
+    "b1": "OFPR.Code"
+   },
+   {
+    "name": "FcTo",
+    "label": "截止账期",
+    "type": "fc",
+    "hint": "空 = 同起始账期",
+    "b1": "OFPR.Code"
+   },
+   {
+    "name": "Item",
+    "label": "物料",
+    "type": "text",
+    "hint": "开头匹配，多个用逗号；=开头精确匹配",
+    "b1": "OITM.ItemCode"
+   },
+   {
+    "name": "ItemGrp",
+    "label": "物料组",
+    "type": "grp",
+    "hint": "物料组代码，多个用逗号",
+    "b1": "OITB.ItmsGrpCod"
+   },
+   {
+    "name": "Busi",
+    "label": "领用类型",
+    "type": "text",
+    "hint": "业务类型代码，开头匹配，多个用逗号；=开头精确匹配",
+    "b1": "@U_CIOTRN.Code"
+   },
+   {
+    "name": "Dept",
+    "label": "部门",
+    "type": "text",
+    "hint": "成本中心代码，开头匹配，多个用逗号；=开头精确匹配",
+    "b1": "OPRC.PrcCode"
+   },
+   {
+    "name": "CostType",
+    "label": "成本类型",
+    "type": "sel",
+    "opts": [
+     [
+      "",
+      "全部"
+     ],
+     [
+      "I04",
+      "I04 其他入库"
+     ],
+     [
+      "O04",
+      "O04 其他出库"
+     ],
+     [
+      "I10",
+      "I10 盘点入库"
+     ],
+     [
+      "O10",
+      "O10 盘点出库"
+     ]
+    ],
+    "def": ""
+   },
+   {
+    "name": "STYPE",
+    "label": "显示方式",
+    "type": "stype",
+    "opts": [
+     [
+      "1",
+      "单据行明细"
+     ],
+     [
+      "0",
+      "领用类型 × 部门 × 科目"
+     ]
+    ],
+    "def": "1"
+   }
+  ],
+  "drill": {
+   "0": {
+    "stype": "1",
+    "set": {
+     "Busi": "=领用类型编码",
+     "Dept": "=部门编码"
+    }
+   }
+  },
+  "b1": "/* SELECT FROM \"OFPR\" T0 WHERE T0.\"Code\" = '[%0]' */\n/* SELECT FROM \"OFPR\" T1 WHERE T1.\"Code\" = '[%1]' */\n/* SELECT FROM \"OITM\" T2 WHERE T2.\"ItemCode\" = '[%2]' */\n/* SELECT FROM \"OITB\" T3 WHERE T3.\"ItmsGrpCod\" = '[%3]' */\n/* SELECT FROM \"@U_CIOTRN\" T4 WHERE T4.\"Code\" = '[%4]' */\n/* SELECT FROM \"OPRC\" T5 WHERE T5.\"PrcCode\" = '[%5]' */\nCALL \"MTC_CA_RPT_24_OTHERUSE\"('[%0]', '[%1]', '[%2]', '[%3]', '[%4]', '[%5]', '[%6]', '[%7]');"
+ },
+ {
   "id": "06",
   "proc": "MTC_CA_RPT_06_EXPALLOC",
   "name": "制造费用 / 人工分配表",

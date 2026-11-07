@@ -1,7 +1,7 @@
 # 成本报表（用户 2026-10-30）：由 新框架/reports/rpt_defs.json 生成
 #   ① 新框架/reports/B1查询语句.md   每张报表一条可粘贴进 B1 查询管理器的 CALL 语句
 #   ② tools/console/js/rptdefs.js    执行台“成本报表”页的报表定义 RPTDEFS（含 B1 语句）
-#   ③ tools/console/actions.json     rpt00 … rpt23 和下拉查询 rptGrpList / rptPoolList / rptCustType / rptSalType、参数校验 rp_*
+#   ③ tools/console/actions.json     rpt00 … rpt24 和下拉查询 rptGrpList / rptPoolList / rptCustType / rptSalType、参数校验 rp_*
 # 并核对 rpt_defs.json 的参数顺序与 新框架/sql/21_reports.sql 的过程签名一致。改了 rpt_defs.json 或过程参数后运行：
 #   python3 新框架/tools/gen_rpt.py
 import json, os, re, sys

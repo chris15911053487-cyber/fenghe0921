@@ -184,11 +184,12 @@ B1CFG_NEEDS = '@MTC_CA_PARAM,@MTC_CA_POOL,@MTC_CA_POOL1,@MTC_CA_POOL2,OPRC.U_Cal
 f20 = os.path.join(ROOT, '新框架', 'sql', '20_b1cfg_check.sql')
 for i, s20 in enumerate([x.strip() for x in rd(f20).split('\n@@\n') if x.strip()], 1):
     stmts.append(('B1 配置校验 20_b1cfg_check.sql #%d' % i, '-- @needs %s\n%s' % (B1CFG_NEEDS, s20)))
-# 成本报表（21_reports.sql：24 个只读过程 MTC_CA_RPT_*，用户 2026-10-30）：引用旧模块的 B1 自定义表和字段，带 -- @needs，缺了跳过
+# 成本报表（21_reports.sql：25 个只读过程 MTC_CA_RPT_*，用户 2026-10-30）：引用旧模块的 B1 自定义表和字段，带 -- @needs，缺了跳过
 RPT_NEEDS = '@MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice'
+RPT24_NEEDS = ',@MTC_CSIGE1,@MTC_CSOIGE,@MTC_CSIGN1,@MTC_CSOIGN,OIGE.U_Creator,OIGN.U_Creator'   # R24 其他领用：领料申请表，缺了只跳过这一张
 f21 = os.path.join(ROOT, '新框架', 'sql', '21_reports.sql')
 for i, s21 in enumerate([x.strip() for x in rd(f21).split('\n@@\n') if x.strip()], 1):
-    stmts.append(('成本报表 21_reports.sql #%d' % i, '-- @needs %s\n%s' % (RPT_NEEDS, s21)))
+    stmts.append(('成本报表 21_reports.sql #%d' % i, '-- @needs %s\n%s' % (RPT_NEEDS + (RPT24_NEEDS if '"MTC_CA_RPT_24_OTHERUSE"' in s21 else ''), s21)))
 # 历史回填（22_legacy_load.sql：旧框架结果转成历史运行 RunType H，报表合并，用户 2026-11-02）：读旧模块结果表，带 -- @needs，旧表齐了才执行
 LEGACY_NEEDS = ('MTC_COST_0301_INVNT,MTC_COST_0302_INVNTDETAIL1,MTC_COST_0321_OWOR,MTC_COST_0321_OWOR1,MTC_COST_0321_OWOR1_REG,'
                 'MTC_COST_0321_OWOR_SUM,MTC_COST_0322_OWOR_ZCP,MTC_COST_0322_OWOR_ZCP1,MTC_COST_0801_TOOJDT,MTC_COST_0802_OJDTBASEDETAIL,U_COILV,'

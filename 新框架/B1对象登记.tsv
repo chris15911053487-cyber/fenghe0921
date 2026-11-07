@@ -21,3 +21,25 @@ OITM.U_KeyItem	已有	否	执行台“生成 B1 单据”写期初单价维护�
 @MTC_OWOR.U_InitPrice	误报	否	subfee.sql 别名 R / D 在不同段指 PDN1 / RPD1，扫描器按别名误认（2026-10-30）
 @MTC_OWOR.U_IsPrice	误报	否	同上
 IGN1.U_IsPrice	误报	否	同上
+@MTC_CSIGE1	已有	-	领用 / 入库申请表（R24 其他领用，取自用户 2026-11-06 的旧查询；缺了部署时只跳过 R24）
+@MTC_CSIGN1	已有	-	领用 / 入库申请表（R24 其他领用，取自用户 2026-11-06 的旧查询；缺了部署时只跳过 R24）
+@MTC_CSOIGE	已有	-	领用 / 入库申请表（R24 其他领用，取自用户 2026-11-06 的旧查询；缺了部署时只跳过 R24）
+@MTC_CSOIGN	已有	-	领用 / 入库申请表（R24 其他领用，取自用户 2026-11-06 的旧查询；缺了部署时只跳过 R24）
+@MTC_CSOIGE.U_Creator	已有	-	同上
+@MTC_CSOIGE.U_Remark	已有	-	同上
+@MTC_CSOIGE.U_Remark2	已有	-	同上
+@MTC_CSOIGE.U_Remark3	已有	-	同上
+@MTC_CSOIGE.U_SupNum	已有	-	同上
+@MTC_CSOIGN.U_Creator	已有	-	同上
+@MTC_CSOIGN.U_Remark	已有	-	同上
+@MTC_CSOIGN.U_Remark2	已有	-	同上
+@MTC_CSOIGN.U_Remark3	已有	-	同上
+@MTC_CSOIGN.U_SupNum	已有	-	同上
+@MTC_CSOIGE.U_OARequestID	已有	-	同上
+OIGE.U_Creator	已有	-	同上
+OIGN.U_Creator	已有	-	同上
+OUSR.U_NAME	已有	-	B1 标准字段
+?.U_NAME	误报	-	R24 里别名 U、T2 在两段子查询中指不同的表
+?.U_OARequestID	误报	-	R24 里别名 U、T2 在两段子查询中指不同的表
+?.U_Remark2	误报	-	R24 里别名 U、T2 在两段子查询中指不同的表
+?.U_Remark3	误报	-	R24 里别名 U、T2 在两段子查询中指不同的表

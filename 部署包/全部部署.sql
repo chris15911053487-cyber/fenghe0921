@@ -1,6 +1,6 @@
 -- FH100 成本核算一次性部署包（由 新框架/tools/build_deploy.py 生成，不要手改）
--- 生成时间 2026-11-06 19:17；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
--- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 975 条语句。对象不带 schema 前缀，建在当前 schema。
+-- 生成时间 2026-11-06 21:11；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
+-- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 976 条语句。对象不带 schema 前缀，建在当前 schema。
 -- 语句之间用单独一行 @@ 分隔，每条以 "-- @stmt 说明" 开头。请用 部署包/ 里的执行程序执行（见 README.md）。
 -- 已有的表、索引、序列、旧模块视图和过程会跳过（不会覆盖）；新框架的视图、过程是 CREATE OR REPLACE，配置初值是 UPSERT。
 -- 未包含：MTC_COST_0302_INVNTDETAIL1_Backup_20260927（备份/测试对象）
@@ -28310,8 +28310,8 @@ CALL "MTC_CA_P_PARAM_B1_SNAP"(NULL, 'SYNC')
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- =====================================================================
 -- 新成本框架：成本报表（用户 2026-10-30，设计稿 8.7；替代旧 MTC_RPT_CO* 报表）
--- 24 个只读存储过程 MTC_CA_RPT_00 … 23，B1 查询管理器里存 CALL "MTC_CA_RPT_xx"('[%0]', …) 打开，
--- 执行台“成本报表”页调同一批过程（actions.json rpt00 … rpt23），口径只有一套。
+-- 25 个只读存储过程 MTC_CA_RPT_00 … 24，B1 查询管理器里存 CALL "MTC_CA_RPT_xx"('[%0]', …) 打开，
+-- 执行台“成本报表”页调同一批过程（actions.json rpt00 … rpt24），口径只有一套。
 --
 -- 通用约定：
 --   · 参数全部 NVARCHAR，留空 = 全部；多个值用英文逗号（中文逗号也认）；物料编码、订单号、业务伙伴等代码按开头匹配，值前加 = 精确匹配（如 =A1）。
@@ -28920,6 +28920,114 @@ END
 
 @@
 -- @stmt 成本报表 21_reports.sql #12
+-- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice,@MTC_CSIGE1,@MTC_CSOIGE,@MTC_CSIGN1,@MTC_CSOIGN,OIGE.U_Creator,OIGN.U_Creator
+-- ---------------------------------------------------------------------
+-- R24 其他领用明细表（用户 2026-11-06，替代旧的其他领用查询）：与生产订单无关的其他出入库和盘点，逐单据行列出成本、部门、科目、研发项目和领用申请信息。
+-- 参数：FcFrom, FcTo, Item 物料, ItemGrp 物料组, Busi 领用类型（业务类型代码）, Dept 部门（成本中心代码）, CostType 成本类型（I04 / O04 / I10 / O10）,
+--       STYPE 1 单据行明细（默认）/ 0 领用类型 × 部门 × 科目汇总
+-- 口径：MTC_CA_R_LINE + S_LINE，交易类型 I04 / O04 / I10 / O10（这四类不挂订单，P20_LINE 只给 I03 / O03 / I07 / O07 / I08 / O08 / I09 / O09 写订单）。
+--       数量、金额按领用为正（入库类为负，= −R_LINE）；只含计价仓库，同收发存；历史期取回填的 R_LINE。公摊费用池有值 = 记 5101，金额进该费用池（V18）。
+--       项目、备注、领用人、申请单号直接读当前 B1 单据（IGE1 / IGN1、@MTC_CSOIGE / @MTC_CSOIGN），创建日期、创建人取单据（旧查询取的是计算时间和计算人）。
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE "MTC_CA_RPT_24_OTHERUSE" (
+    IN FcFrom NVARCHAR(10), IN FcTo NVARCHAR(10), IN Item NVARCHAR(5000), IN ItemGrp NVARCHAR(5000), IN Busi NVARCHAR(500),
+    IN Dept NVARCHAR(500), IN CostType NVARCHAR(100), IN STYPE NVARCHAR(1))
+LANGUAGE SQLSCRIPT READS SQL DATA AS
+BEGIN
+    DECLARE nItem INT; DECLARE nGrp INT; DECLARE nBusi INT; DECLARE nDept INT; DECLARE nTr INT;
+    DECLARE dB DATE; DECLARE dE DATE;
+    runs = SELECT "FcCode", "RunId", "D0", "D1" FROM "MTC_CA_F_RPT_RUN"(:FcFrom, :FcTo) WHERE "RunId" IS NOT NULL;
+    SELECT MIN("D0"), MAX("D1") INTO dB, dE FROM :runs;
+    lItem = SELECT "V", "P" FROM "MTC_CA_F_RPT_LIST"(:Item);    SELECT COUNT(*) INTO nItem FROM :lItem;
+    lGrp  = SELECT "V", "P" FROM "MTC_CA_F_RPT_LIST"(:ItemGrp); SELECT COUNT(*) INTO nGrp FROM :lGrp;
+    lBusi = SELECT "V", "P" FROM "MTC_CA_F_RPT_LIST"(:Busi);    SELECT COUNT(*) INTO nBusi FROM :lBusi;
+    lDept = SELECT "V", "P" FROM "MTC_CA_F_RPT_LIST"(:Dept);    SELECT COUNT(*) INTO nDept FROM :lDept;
+    lTr   = SELECT "V", "P" FROM "MTC_CA_F_RPT_LIST"(:CostType); SELECT COUNT(*) INTO nTr FROM :lTr;
+    lnx = SELECT U."FcCode", L."RunId", L."LineId", D."ObjType", D."DocEntry", D."DocNum", D."LineNum", D."DocDate", D."BusiType", L."TransCode",
+                 L."ItemCode", M."ItemName", M."ItmsGrpCod", I."iLevel", L."Qty", L."Price", L."Amount", L."MatAmt", L."LabAmt", L."MfgAmt", L."SubAmt",
+                 L."PriceSrc", CASE WHEN L."IsShared" = 'Y' THEN L."PoolCode" END AS "SharedPool",
+                 D."OcrCode", D."WhsCode", D."AcctCode", D."BaseType", D."BaseEntry", D."BaseLine"
+            FROM :runs U
+            JOIN "MTC_CA_R_LINE" L ON L."RunId" = U."RunId"
+            JOIN "MTC_CA_S_LINE" D ON D."RunId" = L."RunId" AND D."LineId" = L."LineId"
+            LEFT JOIN "MTC_CA_R_ITEM" I ON I."RunId" = L."RunId" AND I."ItemCode" = L."ItemCode"
+            LEFT JOIN "OITM" M ON M."ItemCode" = L."ItemCode"
+           WHERE L."TransCode" IN ('I04', 'O04', 'I10', 'O10')
+             AND (:nItem = 0 OR EXISTS (SELECT 1 FROM :lItem X WHERE L."ItemCode" LIKE X."P"))
+             AND (:nGrp = 0 OR EXISTS (SELECT 1 FROM :lGrp X WHERE TO_NVARCHAR(M."ItmsGrpCod") = X."V"))
+             AND (:nBusi = 0 OR EXISTS (SELECT 1 FROM :lBusi X WHERE D."BusiType" LIKE X."P"))
+             AND (:nDept = 0 OR EXISTS (SELECT 1 FROM :lDept X WHERE D."OcrCode" LIKE X."P"))
+             AND (:nTr = 0 OR EXISTS (SELECT 1 FROM :lTr X WHERE L."TransCode" = X."V"));
+    IF :STYPE = '0' THEN
+        SELECT L."BusiType" AS "领用类型编码", MAX(C."Name") AS "领用类型名称", L."OcrCode" AS "部门编码", MAX(P."PrcName") AS "部门名称",
+               L."AcctCode" AS "其他领用科目编码", MAX(A."AcctName") AS "其他领用科目名称", COUNT(*) AS "行数",
+               CAST(-SUM(L."Amount") AS DECIMAL(19,2)) AS "成本金额",
+               CAST(-SUM(L."MatAmt") AS DECIMAL(19,2)) AS "构成·材料", CAST(-SUM(L."LabAmt") AS DECIMAL(19,2)) AS "构成·人工",
+               CAST(-SUM(L."MfgAmt") AS DECIMAL(19,2)) AS "构成·制造", CAST(-SUM(L."SubAmt") AS DECIMAL(19,2)) AS "构成·委外"
+          FROM :lnx L
+          LEFT JOIN "@U_CIOTRN" C ON C."Code" = L."BusiType"
+          LEFT JOIN "OPRC" P ON P."PrcCode" = L."OcrCode"
+          LEFT JOIN "OACT" A ON A."AcctCode" = L."AcctCode"
+         GROUP BY L."BusiType", L."OcrCode", L."AcctCode"
+         ORDER BY L."BusiType", L."OcrCode", L."AcctCode";
+    ELSE
+        ge = SELECT TO_NVARCHAR(T0."ObjType") AS "ObjType", T0."DocEntry", T0."LineNum", MAX(T0."Project") AS "Project", MAX(T."CreateDate") AS "CreateDate",
+                    STRING_AGG(TO_NVARCHAR(T2."U_Remark"), ',') AS "Remark", STRING_AGG(TO_NVARCHAR(T2."U_Remark2"), ',') AS "Remark2", STRING_AGG(TO_NVARCHAR(T2."U_Remark3"), ',') AS "Remark3",
+                    STRING_AGG(TO_NVARCHAR(COALESCE(U."U_NAME", T."U_Creator")), ',') AS "Creator", STRING_AGG(TO_NVARCHAR(T2."U_SupNum"), ',') AS "SupNum",
+                    MAX(TO_NVARCHAR(T2."U_OARequestID")) AS "OaId"
+               FROM "IGE1" T0
+               JOIN "OIGE" T ON T0."DocEntry" = T."DocEntry"
+               LEFT JOIN "@MTC_CSIGE1" T1 ON T1."Object" = T0."U_BaseType" AND T1."DocEntry" = T0."U_BaseEntry" AND T1."LineId" = T0."U_BaseLine"
+               LEFT JOIN "@MTC_CSOIGE" T2 ON T2."DocEntry" = T1."DocEntry"
+               LEFT JOIN "OUSR" U ON U."USER_CODE" = T2."U_Creator"
+              WHERE T."DocDate" BETWEEN :dB AND :dE
+              GROUP BY T0."ObjType", T0."DocEntry", T0."LineNum";
+        gn = SELECT TO_NVARCHAR(T0."ObjType") AS "ObjType", T0."DocEntry", T0."LineNum", MAX(T0."Project") AS "Project", MAX(T."CreateDate") AS "CreateDate",
+                    STRING_AGG(TO_NVARCHAR(T2."U_Remark"), ',') AS "Remark", STRING_AGG(TO_NVARCHAR(T2."U_Remark2"), ',') AS "Remark2", STRING_AGG(TO_NVARCHAR(T2."U_Remark3"), ',') AS "Remark3",
+                    STRING_AGG(TO_NVARCHAR(COALESCE(U."U_NAME", T."U_Creator")), ',') AS "Creator", STRING_AGG(TO_NVARCHAR(T2."U_SupNum"), ',') AS "SupNum"
+               FROM "IGN1" T0
+               JOIN "OIGN" T ON T0."DocEntry" = T."DocEntry"
+               LEFT JOIN "@MTC_CSIGN1" T1 ON T1."Object" = T0."U_BaseType" AND T1."DocEntry" = T0."U_BaseEntry" AND T1."LineId" = T0."U_BaseLine"
+               LEFT JOIN "@MTC_CSOIGN" T2 ON T2."DocEntry" = T1."DocEntry"
+               LEFT JOIN "OUSR" U ON U."USER_CODE" = T2."U_Creator"
+              WHERE T."DocDate" BETWEEN :dB AND :dE
+              GROUP BY T0."ObjType", T0."DocEntry", T0."LineNum";
+        ext = SELECT "ObjType", "DocEntry", "LineNum", "Project", "CreateDate", "Remark", "Remark2", "Remark3", "Creator", "SupNum", "OaId" FROM :ge
+              UNION ALL
+              SELECT "ObjType", "DocEntry", "LineNum", "Project", "CreateDate", "Remark", "Remark2", "Remark3", "Creator", "SupNum", CAST(NULL AS NVARCHAR(100)) FROM :gn;
+        vd = SELECT TO_NVARCHAR("ObjType") AS "ObjType", TO_NVARCHAR("DocEntry") AS "DocEntry", TO_NVARCHAR("LineNum") AS "LineNum", TO_NVARCHAR("BaseRef") AS "BaseRef"
+               FROM "MTC_VIEW_Document" WHERE TO_NVARCHAR("ObjType") IN ('59', '60') AND "DocDate" BETWEEN :dB AND :dE;
+        SELECT L."FcCode" AS "账期", L."ObjType" AS "单据类型", T9."DocName" AS "单据类型名称", L."DocEntry" AS "单号 Entry", L."DocNum" AS "单号 Num", L."LineNum" AS "行号",
+               L."DocDate" AS "过账日期", L."BusiType" AS "领用类型编码", C."Name" AS "领用类型名称", L."TransCode" AS "成本类型编码",
+               L."ItemCode" AS "物料编码", L."ItemName" AS "物料名称", TO_NVARCHAR(L."ItmsGrpCod") AS "物料组编码",
+               CAST(-L."Qty" AS DECIMAL(19,6)) AS "数量", CAST(L."Price" AS DECIMAL(19,6)) AS "成本单价", CAST(-L."Amount" AS DECIMAL(19,2)) AS "成本金额",
+               CAST(-L."MatAmt" AS DECIMAL(19,2)) AS "构成·材料", CAST(-L."LabAmt" AS DECIMAL(19,2)) AS "构成·人工",
+               CAST(-L."MfgAmt" AS DECIMAL(19,2)) AS "构成·制造", CAST(-L."SubAmt" AS DECIMAL(19,2)) AS "构成·委外",
+               L."OcrCode" AS "部门编码", P."PrcName" AS "部门名称", E."Project" AS "研发项目编码", R."PrjName" AS "研发项目名称",
+               L."SharedPool" AS "公摊费用池", L."WhsCode" AS "仓库代码", W."WhsName" AS "仓库名称", L."iLevel" AS "层级",
+               G."StockAct" AS "库存科目编码", A1."AcctName" AS "库存科目名称", L."AcctCode" AS "其他领用科目编码", A2."AcctName" AS "其他领用科目名称",
+               L."BaseType" AS "来源类型", L."BaseEntry" AS "来源单号 Entry", V."BaseRef" AS "来源单号 Num", L."BaseLine" AS "来源行号",
+               E."Remark" AS "备注", E."Remark2" AS "领用说明", E."Remark3" AS "领用人", E."CreateDate" AS "创建日期", E."Creator" AS "创建人",
+               CASE WHEN L."ObjType" = '60' THEN E."SupNum" END AS "出库申请单号", CASE WHEN L."ObjType" = '59' THEN E."SupNum" END AS "入库申请单号",
+               L."PriceSrc" AS "定价来源", E."OaId" AS "领料申请表ID"
+          FROM :lnx L
+          LEFT JOIN "MTC_DocType" T9 ON T9."ObjType" = L."ObjType"
+          LEFT JOIN "@U_CIOTRN" C ON C."Code" = L."BusiType"
+          LEFT JOIN "OPRC" P ON P."PrcCode" = L."OcrCode"
+          LEFT JOIN "OWHS" W ON W."WhsCode" = L."WhsCode"
+          LEFT JOIN :ext E ON E."ObjType" = L."ObjType" AND E."DocEntry" = L."DocEntry" AND E."LineNum" = L."LineNum"
+          LEFT JOIN :vd V ON V."ObjType" = L."ObjType" AND V."DocEntry" = TO_NVARCHAR(L."DocEntry") AND V."LineNum" = TO_NVARCHAR(L."LineNum")
+          LEFT JOIN "OPRJ" R ON R."PrjCode" = E."Project"
+          LEFT JOIN (SELECT "PeriodCat", "ItmsGrpCod", MAX("StockAct") AS "StockAct" FROM "OGAR" GROUP BY "PeriodCat", "ItmsGrpCod") G
+                 ON G."PeriodCat" = LEFT(L."FcCode", 4) AND G."ItmsGrpCod" = L."ItmsGrpCod"
+          LEFT JOIN "OACT" A1 ON A1."AcctCode" = G."StockAct"
+          LEFT JOIN "OACT" A2 ON A2."AcctCode" = L."AcctCode"
+         ORDER BY L."DocDate", L."ObjType", L."DocEntry", L."LineNum", L."LineId";
+    END IF;
+END
+
+@@
+-- @stmt 成本报表 21_reports.sql #13
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R06 制造费用 / 人工分配表：费用池归集了多少、按工时分给了哪些产品和订单、没分到的原因。
@@ -29048,7 +29156,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #13
+-- @stmt 成本报表 21_reports.sql #14
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R07 委外加工成本表：委外订单发出材料、加工费、完工成本、在产品，按供应商汇总。
@@ -29132,7 +29240,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #14
+-- @stmt 成本报表 21_reports.sql #15
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R08 销售成本计算表：期初发出商品 + 本期发货 − 独立退货 − 本期消耗（开票、贷项、退货、尾差）= 期末发出商品；销售成本 = DN03。
@@ -29222,7 +29330,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #15
+-- @stmt 成本报表 21_reports.sql #16
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R09 存货与生产成本对账：业务端（新框架结果）与总账按对账项、科目逐项比较，期初 / 本期 / 期末分开列示。
@@ -29257,7 +29365,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #16
+-- @stmt 成本报表 21_reports.sql #17
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R10 成本凭证清单及来源：本期成本模块生成的凭证（每种凭证代码一张）、分录、每笔分录的业务来源。
@@ -29327,7 +29435,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #17
+-- @stmt 成本报表 21_reports.sql #18
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R11 成本异常清单：本期需要人看一眼的物料、订单、费用池和校验项。
@@ -29409,7 +29517,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #18
+-- @stmt 成本报表 21_reports.sql #19
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R17 应付暂估（已收货未开票，含退货）：截至期末未清的收货行（扣已开票、扣基于收货的退货）和不基于收货的退货（为负）。
@@ -29539,7 +29647,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #19
+-- @stmt 成本报表 21_reports.sql #20
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R18 发出商品明细（已发货未开票，含退货）：截至期末未开票的交货行（扣已开票、扣基于交货的退货）和不基于交货的退货（为负）。
@@ -29687,7 +29795,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #20
+-- @stmt 成本报表 21_reports.sql #21
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R12 产品单位成本变动分析：本期与对比期相比单位成本变了多少，拆成材料价格、材料用量、费率、工时、委外加工费因素。
@@ -29787,7 +29895,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #21
+-- @stmt 成本报表 21_reports.sql #22
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R13 材料用量差异（损耗）：订单实际领用与按完工数折算的计划用量之差。
@@ -29856,7 +29964,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #22
+-- @stmt 成本报表 21_reports.sql #23
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R14 产品毛利分析：本期开票收入与结转的销售成本（同 DN03 口径）对比。
@@ -29953,7 +30061,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #23
+-- @stmt 成本报表 21_reports.sql #24
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R15 费用池费用率趋势：各期每个费用池的归集额、工时、每工时费用及环比。
@@ -29995,7 +30103,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #24
+-- @stmt 成本报表 21_reports.sql #25
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R16 期末存货结构：期末存货按类别（原材料 / 半成品 / 产成品 / 在产品 / 发出商品）、物料组、物料的金额和占比，与对比期比较，带最后动账日期。
@@ -30069,7 +30177,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #25
+-- @stmt 成本报表 21_reports.sql #26
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R19 在产品汇总表（用户 2026-11-01）：期初在产品 + 本期领料 + 本级分摊 − 完工转出 − 关单差异 = 期末在产品（四项），
@@ -30201,7 +30309,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #26
+-- @stmt 成本报表 21_reports.sql #27
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R20 在产品明细表（用户 2026-11-01）：一行 = 账期 × 订单 × 材料，期初在产品 + 本期领料 − 完工转出 − 关单差异 = 期末在产品（四项）。
@@ -30277,7 +30385,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #27
+-- @stmt 成本报表 21_reports.sql #28
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R21 成本结转分录清单（用户 2026-11-05）：执行台在 B1 生成的日记账分录，过账和冲销情况。
@@ -30364,7 +30472,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #28
+-- @stmt 成本报表 21_reports.sql #29
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- 交货 / 销售退货行的单位成本（用户 2026-11-05，R23 也要用，从 reports/MTC_RPT_F_SALE_COST.sql 搬进部署包，两处保持一致）
@@ -30418,7 +30526,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #29
+-- @stmt 成本报表 21_reports.sql #30
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- 销售走势事件（用户 2026-11-05，R23 用）：业务端，直接读 B1 单据，和凭证、总账无关；不依赖发出商品结果表，所以历史月份也能算。
@@ -30532,7 +30640,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #30
+-- @stmt 成本报表 21_reports.sql #31
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R22 产品生产成本走势：物料每个月的完工数量、单位成本和料工费委外构成（用户 2026-11-05）。
@@ -30599,7 +30707,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #31
+-- @stmt 成本报表 21_reports.sql #32
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R23 产品销售毛利走势：物料每个月的收入、成本、毛利，已开票 + 暂估（用户 2026-11-05）。

@@ -164,3 +164,10 @@ SELECT 'V17' AS "编号", 'R23 月结固定暂估累计 = 发出商品期末（�
   LEFT JOIN (SELECT "FcCode", SUM(SUM("Cost")) OVER (ORDER BY "FcCode") AS "CumCost"
                FROM "MTC_CA_F_SALE_TREND"('1900-01-01', CURRENT_DATE, '1') WHERE "Kind" = 'ACC' GROUP BY "FcCode") T ON T."FcCode" = U."FcCode"
   LEFT JOIN (SELECT "RunId", SUM("CostAmt") AS "Amt" FROM "MTC_CA_R_GOODS_OUT" GROUP BY "RunId") G ON G."RunId" = U."RunId";
+
+-- V18 公摊材料只来自其他出入库和盘点：R24 的公摊费用池合计 = R06 归集来源 SHARED（SHARED = −R_LINE 公摊行，R24 按领用为正）
+SELECT 'V18' AS "编号", 'R24 公摊费用池合计 = 费用池 SHARED' AS "说明", COUNT(*) AS "账期数",
+       SUM(CASE WHEN ABS(IFNULL(L."Amt", 0) - IFNULL(P."Amt", 0)) > 0.05 THEN 1 ELSE 0 END) AS "不通过数"
+  FROM (SELECT XU.* FROM "MTC_CA_F_RPT_RUN"('0000-00', '9999-99') XU JOIN "MTC_CA_RUN" XRU ON XRU."RunId" = XU."RunId" AND XRU."RunType" <> 'H') U
+  LEFT JOIN (SELECT "RunId", -SUM("Amount") AS "Amt" FROM "MTC_CA_R_LINE" WHERE "IsShared" = 'Y' AND "TransCode" IN ('I04', 'O04', 'I10', 'O10') GROUP BY "RunId") L ON L."RunId" = U."RunId"
+  LEFT JOIN (SELECT "RunId", SUM("Amount") AS "Amt" FROM "MTC_CA_R_POOL" WHERE "Src" = 'SHARED' GROUP BY "RunId") P ON P."RunId" = U."RunId";

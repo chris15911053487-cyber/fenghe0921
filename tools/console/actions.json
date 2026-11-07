@@ -42,12 +42,15 @@
     "rp_AgeDays": "^(\\d{1,9}(\\.\\d{1,4})?)?$",
     "rp_AmtMin": "^(\\d{1,9}(\\.\\d{1,4})?)?$",
     "rp_Basis": "^[^\\x00-\\x1f]{0,50}$",
+    "rp_Busi": "^[^\\x00-\\x1f]{0,500}$",
     "rp_ByCat": "^[YN]?$",
     "rp_Cat": "^[^\\x00-\\x1f]{0,50}$",
     "rp_Cls": "^[^\\x00-\\x1f]{0,50}$",
     "rp_CmpFc": "^(\\d{4}-\\d{2})?$",
+    "rp_CostType": "^[^\\x00-\\x1f]{0,50}$",
     "rp_Cust": "^[^\\x00-\\x1f]{0,500}$",
     "rp_CustType": "^[^\\x00-\\x1f]{0,200}$",
+    "rp_Dept": "^[^\\x00-\\x1f]{0,500}$",
     "rp_Dest": "^[^\\x00-\\x1f]{0,50}$",
     "rp_Dir": "^[^\\x00-\\x1f]{0,50}$",
     "rp_DocNum": "^[^\\x00-\\x1f]{0,500}$",
@@ -1360,6 +1363,21 @@
         "rp_STYPE"
       ],
       "sql": "CALL \"MTC_CA_RPT_05_MATUSE\"(?, ?, ?, ?, ?, ?, ?)"
+    },
+    "rpt24": {
+      "kind": "query",
+      "title": "R24 其他领用明细表",
+      "params": [
+        "rp_FcFrom",
+        "rp_FcTo",
+        "rp_Item",
+        "rp_ItemGrp",
+        "rp_Busi",
+        "rp_Dept",
+        "rp_CostType",
+        "rp_STYPE"
+      ],
+      "sql": "CALL \"MTC_CA_RPT_24_OTHERUSE\"(?, ?, ?, ?, ?, ?, ?, ?)"
     },
     "rpt06": {
       "kind": "query",
