@@ -1,6 +1,6 @@
 -- FH100 成本核算一次性部署包（由 新框架/tools/build_deploy.py 生成，不要手改）
--- 生成时间 2026-11-06 21:11；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
--- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 976 条语句。对象不带 schema 前缀，建在当前 schema。
+-- 生成时间 2026-11-06 21:27；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
+-- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 978 条语句。对象不带 schema 前缀，建在当前 schema。
 -- 语句之间用单独一行 @@ 分隔，每条以 "-- @stmt 说明" 开头。请用 部署包/ 里的执行程序执行（见 README.md）。
 -- 已有的表、索引、序列、旧模块视图和过程会跳过（不会覆盖）；新框架的视图、过程是 CREATE OR REPLACE，配置初值是 UPSERT。
 -- 未包含：MTC_COST_0302_INVNTDETAIL1_Backup_20260927（备份/测试对象）
@@ -18080,7 +18080,7 @@ UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBl
 
 @@
 -- @stmt 新框架 04_seed.sql #90
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-23', 'PRE', 230, '需要维护期初成本价的物料', '本期有要按单价计价的变动（出库、其他入库、盘点、无原单退货等），计算前却没有任何价格来源（无期初结存金额、无采购 / 完工 / 形态转换入库、无维护价）；区分首次出现和以前出现过，给出建议价（以前最近一期单价，或最近采购价）。只列清单，不写 @MTC_COST_QCPRICE，在 B1 维护后重新检查（用户 2026-10-13）', 'N', 'S1') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-23', 'PRE', 230, '需要维护期初成本价的物料', '本期有要按单价计价的变动（出库、其他入库、盘点、无原单退货等），计算前却没有任何价格来源（无期初结存金额、无采购 / 完工 / 形态转换入库、无维护价；0 金额的采购收货不算来源，加权单价的分母（期初数量 + 计入加权单价的行）要大于 0）；区分首次出现和以前出现过，给出建议价（以前最近一期单价，或最近采购价）。只列清单，不写 @MTC_COST_QCPRICE，在 B1 维护后重新检查（用户 2026-10-13）', 'N', 'S1') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 04_seed.sql #91
@@ -18236,260 +18236,264 @@ UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBl
 
 @@
 -- @stmt 新框架 04_seed.sql #129
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-05', 'POST', 150, '配对金额', 'I05 = −O05；退货、取消单按原单成本；找不到原单按加权价兜底的行', 'Y', 'S3') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-17', 'POST', 179, '加权价入库 0 成本', '盘盈、其他入库、无原单退货等按加权价入库的物料，算出的单价为 0（如只有 0 金额的采购收货，或期初有数量没有金额），这些入库都是 0 成本；固定只警告（用户 2026-11-06）。完全没有单价来源的归 POST-07', 'N', 'S1') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 04_seed.sql #130
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-05', 'POST', 150, '配对金额', 'I05 = −O05；退货、取消单按原单成本；找不到原单按加权价兜底的行', 'Y', 'S3') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #131
 -- 数据字典：快照表（S 层）和配置表的数据来源（用户 2026-10-14，执行台“说明书 → 表与字段”显示、可搜索）
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ITEM', 'S', 'P20_ITEM：OITM 物料、OITB 物料组（U_ItemGrpType 车间类别）、OITT / ITT1 当前 BOM（算层级），MTC_CA_C_LEVEL_OVR 层级覆盖') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #131
+-- @stmt 新框架 04_seed.sql #132
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_LINE', 'S', 'P20_LINE：OIVL 库存记录（计价仓库 OWHS.U_IsCost=Y），交易类型取 MTC_VIEW_Document + @U_CIOTRN（59/60 的 U_TrsName）+ @MTC_COST_IOTYPE；采购收货 / 退货 / 发票 OPDN·PDN1、ORPD·RPD1、OPCH·PCH1、ORPC·RPC1；销售退货 RDN1；库存重估 @MTC_OMRV / @MTC_OMRV1；P20_AP 用 S_AP_MOVE 覆盖材料暂估金额') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #132
+-- @stmt 新框架 04_seed.sql #133
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER', 'S', 'P20_ORDER：OWOR 生产 / 委外订单（U_OrdType 工单类型）、@MTC_OWOR 返工单（U_OrdType、U_ItemCode、U_PlannedQty）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #133
+-- @stmt 新框架 04_seed.sql #134
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER_LINE', 'S', 'P20_ORDER：WOR1 生产订单行、@MTC_WOR1 返工单行（计划用料）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #134
+-- @stmt 新框架 04_seed.sql #135
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_EXP', 'S', 'P20_EXP：OJDT / JDT1 已过账凭证（人工科目 LAB_EXP、制造费用科目 MFG_EXP_PREFIX 开头，凭证代码在 EXP_JDT_TRANSCODES；取值见 B1 @MTC_CA_PARAM），@MTC_OMRV / @MTC_OMRV1 库存重估，OWOR / @MTC_OWOR 找订单') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #135
+-- @stmt 新框架 04_seed.sql #136
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_SUBFEE', 'S', 'P20_SUBFEE：委外加工费收货 OPDN / PDN1（U_BaseType / U_BaseEntry 指向生产收货 IGN1，U_OWORNum 找 OWOR）、退货 ORPD / RPD1，@MTC_OMRV / @MTC_OMRV1 中 U_BaseType=ProWW 的重估行，@MTC_OWOR 返工单') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #136
+-- @stmt 新框架 04_seed.sql #137
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_AP_MOVE', 'S', 'P20_AP：采购收货 OPDN / PDN1、采购退货 ORPD / RPD1、应付发票 OPCH / PCH1、应付贷项 ORPC / RPC1（暂估价 U_InitPrice / U_IsPrice / Price），OITM 判断库存物料，@MTC_COST_IOTYPE') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #137
+-- @stmt 新框架 04_seed.sql #138
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_HOURS', 'S', 'P20_MISC：B1 生产工时 @MTC_COST_TIME（表头 U_FcCode 账期、Canceled）+ @MTC_COST_TIME1（行 U_ItemCode 物料、U_Time 单位工时）；同一物料多行取最大值（PRE-13 报出）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #138
+-- @stmt 新框架 04_seed.sql #139
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_QCPRICE', 'S', 'P20_MISC：B1 期初单价维护 @MTC_COST_QCPRICE（表头 U_FcCode）+ @MTC_COST_QCPRICE1（行 U_ItemCode、U_Price）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #139
+-- @stmt 新框架 04_seed.sql #140
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_OPEN', 'S', 'P20_OPEN：上期是承接账期时取 MTC_CA_BOOT_ITEM（旧框架 0301 期末，P_BOOTSTRAP 写入，料工费按 BOOT_RATIO 拆分）；否则取上期最近一次成功正式运行的 R_ITEM 期末') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #140
+-- @stmt 新框架 04_seed.sql #141
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER_OPEN', 'S', 'P20_OPEN：上期是承接账期时取 MTC_CA_BOOT_ORDER_MAT（旧框架 CO4011 / ZCP1，按领用材料的 BOOT_RATIO 拆分料工费）；否则取上期最近一次成功正式运行的 R_ORDER_MAT 累计数（未关闭订单）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #141
+-- @stmt 新框架 04_seed.sql #142
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL', 'C', 'P05：B1 @MTC_CA_POOL（Code、Name、U_IsDefault、U_Descr）有数据时每次运行前整表覆盖；没有时用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #142
+-- @stmt 新框架 04_seed.sql #143
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL_SRC', 'C', 'P05：B1 @MTC_CA_POOL1（U_OcrCode、U_FromFc、U_ToFc）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #143
+-- @stmt 新框架 04_seed.sql #144
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL_TGT', 'C', 'P05：B1 @MTC_CA_POOL2（U_MatchBy、U_MatchVal、U_WorTypes、U_FromFc、U_ToFc）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #144
+-- @stmt 新框架 04_seed.sql #145
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_ACCT', 'C', 'MFG_EXP_PREFIX / LAB_EXP 两行由 P05 从 B1 @MTC_CA_PARAM（没有时读旧 @MTC_CA_EXPSET1）同步（有数据时）；其余科目用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #145
+-- @stmt 新框架 04_seed.sql #146
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM', 'C', 'MTC_CA_C_PARAM_DEF 登记的参数由 P05 从 B1 @MTC_CA_PARAM（没有时读旧 @MTC_CA_EXPSET1）同步，B1 里出现的以 B1 为准；CLOSE_DIF_POOL 取 @MTC_CA_POOL.U_IsCloseDif=Y 的池（有数据时）；其余参数用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #146
+-- @stmt 新框架 04_seed.sql #147
 UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JV_REV_TRANSCODES', '0000-00', '9999-99', ',AR03,AR04,', 'LIST', '生成 SAP 凭单时下月初自动冲销的凭证代码：凭单勾选冲销（OBTF.AutoStorno），冲销日期 = 下一账期第一天；同旧 COJZ_01/03 的 U_IsRev（用户 2026-10-19）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #147
+-- @stmt 新框架 04_seed.sql #148
 -- 参数目录（用户 2026-10-28：参数改在 B1 @MTC_CA_PARAM 平铺表格维护）。新增可在 B1 维护的参数时在这里加一行
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('MFG_EXP_PREFIX', 'ACCT', '费用归集', 110, '制造费用科目前缀', 'STR', NULL, '凭证里以它开头的科目计入制造费用，如 5101') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #148
+-- @stmt 新框架 04_seed.sql #149
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LAB_EXP', 'ACCT', '费用归集', 120, '人工费用科目', 'STR', NULL, '科目代码，如 500102') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #149
+-- @stmt 新框架 04_seed.sql #150
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('EXP_JDT_TRANSCODES', 'PARAM', '费用归集', 130, '计入费用池的凭证代码', 'LIST', NULL, 'OJDT.TransCode，逗号分隔；“空”= 没有凭证代码的手工凭证。如 空,PP03,MR03,MR11,MR12') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #150
+-- @stmt 新框架 04_seed.sql #151
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SUBFEE_ITEM', 'PARAM', '费用归集', 140, '委外加工费物料', 'STR', NULL, '物料代码，如 X0510001') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #151
+-- @stmt 新框架 04_seed.sql #152
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('START_FC', 'PARAM', '计算控制', 210, '新框架起始账期', 'FC', NULL, 'YYYY-MM。上线后不要改，会打乱期初承接') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #152
+-- @stmt 新框架 04_seed.sql #153
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('BOOTSTRAP_FC', 'PARAM', '计算控制', 220, '期初承接账期', 'FC', NULL, 'YYYY-MM，从旧框架该期结果取期初。上线后不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #153
+-- @stmt 新框架 04_seed.sql #154
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_PRICE', 'PARAM', '计算控制', 230, '收敛标准：单价', 'DEC', NULL, '物料单价两轮之差的上限，如 0.000001；不清楚不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #154
+-- @stmt 新框架 04_seed.sql #155
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_AMT', 'PARAM', '计算控制', 240, '收敛标准：金额', 'DEC', NULL, '费用池、关单差异两轮之差的上限（元），如 0.01；不清楚不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #155
+-- @stmt 新框架 04_seed.sql #156
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('MAX_ITER', 'PARAM', '计算控制', 250, '最大迭代轮数', 'INT', NULL, '整数，超过仍不收敛则不写结果，如 50') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #156
+-- @stmt 新框架 04_seed.sql #157
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ITER_TRACE_TOP', 'PARAM', '计算控制', 252, '迭代明细记录物料数', 'INT', NULL, '整数，每轮记录单价变化最大的前 N 个物料，排查不收敛用，如 30；0 = 不记') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #157
+-- @stmt 新框架 04_seed.sql #158
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('KEEP_NOCONV', 'PARAM', '计算控制', 254, '未收敛 / 出错时保留中间结果', 'STR', 'Y,N', 'Y = 未收敛或迭代及以后出错时，保留本次快照和最后一轮中间结果（可在执行台查看、导出排查），下次成功运行时自动删除；N = 删除') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #158
+-- @stmt 新框架 04_seed.sql #159
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LEVEL_GUARD', 'PARAM', '计算控制', 260, '层级计算保护上限', 'INT', NULL, '整数，防循环引用，不是业务层数，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #159
+-- @stmt 新框架 04_seed.sql #160
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('QCP_PRICED_IN', 'PARAM', '计算控制', 270, 'PRE-23 价格来源入库类型', 'LIST', NULL, '交易类型逗号分隔，如 I01,I03,I05,I07,I08,I09,I90') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #160
+-- @stmt 新框架 04_seed.sql #161
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LEGACY_INITPRICE_DATE', 'PARAM', '计算控制', 280, '按 U_InitPrice 取成本的截止日', 'DATE', NULL, 'YYYY-MM-DD，该日及以前的交货 / 退货按行上 U_InitPrice 取成本') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #161
+-- @stmt 新框架 04_seed.sql #162
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TAIL_MAX', 'PARAM', '尾差与校验', 310, '零库存尾差结转上限', 'DEC', NULL, '元（含）：期末数量 0、金额在 ± 本值以内的结转 640101（JZ04），如 0.02') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #162
+-- @stmt 新框架 04_seed.sql #163
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TAIL_WARN', 'PARAM', '尾差与校验', 320, '尾差报警下限', 'DEC', NULL, '元（含）：POST-14 挤进出库行的尾差绝对值达到本值才报，如 0.1') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #163
+-- @stmt 新框架 04_seed.sql #164
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRICE_JUMP_PCT', 'PARAM', '尾差与校验', 330, '价格波动报警比例', 'DEC', NULL, '%：POST-14 价格波动 / 期末单价偏离，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #164
+-- @stmt 新框架 04_seed.sql #165
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRICE_JUMP_AMT', 'PARAM', '尾差与校验', 340, '价格波动报警金额', 'DEC', NULL, '元：POST-14 价格波动的影响金额下限，如 100') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #165
+-- @stmt 新框架 04_seed.sql #166
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CHECK_DTL_MAX', 'PARAM', '尾差与校验', 350, '每项校验保留明细行数', 'INT', NULL, '整数，如 200') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #166
+-- @stmt 新框架 04_seed.sql #167
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ACCT_CHECK_BUSITYPES', 'PARAM', '尾差与校验', 360, 'PRE-25 核对科目的业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 210') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #167
+-- @stmt 新框架 04_seed.sql #168
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRE08_EXCL_WHS', 'PARAM', '尾差与校验', 370, 'PRE-08 不报的不计价仓库', 'LIST', NULL, '仓库代码逗号分隔，可以为空，如 S300,WX01') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #168
+-- @stmt 新框架 04_seed.sql #169
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('COST_TRANSCODES', 'PARAM', '凭证与对账', 410, '成本模块生成的凭证代码', 'LIST', NULL, '凭证代码逗号分隔；要和代码实际生成的一致，不要随意增删') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #169
+-- @stmt 新框架 04_seed.sql #170
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JV_REV_TRANSCODES', 'PARAM', '凭证与对账', 420, '凭单下月初自动冲销的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 AR03,AR04') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #170
+-- @stmt 新框架 04_seed.sql #171
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RECON_BLOCK_ON', 'PARAM', '凭证与对账', 430, '财务对账按哪列差额阻断', 'STR', 'CUR,END', 'CUR 本期差额（期初差额只列示）/ END 期末差额') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #171
+-- @stmt 新框架 04_seed.sql #172
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RECON_COSTONLY_AREAS', 'PARAM', '凭证与对账', 440, '只比较成本凭证的对账项', 'LIST', NULL, '可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP，逗号分隔') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #172
+-- @stmt 新框架 04_seed.sql #173
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR2_REV_ACCTS', 'PARAM', '凭证与对账', 450, 'PUR2 冲回发票凭证的科目', 'LIST', NULL, '科目或前 4 位，逗号分隔，如 1403,1405,1409,220202') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #173
+-- @stmt 新框架 04_seed.sql #174
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR3_REV_ACCTS', 'PARAM', '凭证与对账', 460, 'PUR3 冲回发票凭证的科目', 'LIST', NULL, '科目或前 4 位，逗号分隔，如 140802') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #174
+-- @stmt 新框架 04_seed.sql #175
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR_STDVAR_ACCTS', 'PARAM', '凭证与对账', 465, 'PUR 勾稽：标准成本差异科目（补充）', 'LIST', NULL, '除物料组的价格差异科目、差异科目外，B1 标准成本凭证还会用到的差异科目；POST-15 要求这些科目在采购单据上净额为 0。逗号分隔，可空') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #175
+-- @stmt 新框架 04_seed.sql #176
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('INITPRICE_NEW_FROM', 'PARAM', '凭证与对账', 466, '指定单价 U_InitPrice 报出起始日', 'DATE', NULL, 'YYYY-MM-DD；这天及以后的收货 / 退货用了 U_InitPrice 时 POST-15 报出，如 2026-01-01') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #176
+-- @stmt 新框架 04_seed.sql #177
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('POST_WARN_IDS', 'PARAM', '计算控制', 285, '只警告的计算后校验', 'LIST', NULL, '校验编号，逗号分隔，如 POST-15；不在这里的计算后校验一律阻断') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #177
+-- @stmt 新框架 04_seed.sql #178
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TB_EXTRA_ACCTS', 'PARAM', '凭证与对账', 470, '科目余额表额外列出的科目', 'LIST', NULL, '科目或科目前缀，逗号分隔，可以为空，如 6602,1122') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #178
+-- @stmt 新框架 04_seed.sql #179
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_VAT_RATE', 'PARAM', '凭证与对账', 480, '样品视同销售税率', 'DEC', NULL, '小数，如 0.13') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #179
+-- @stmt 新框架 04_seed.sql #180
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_VAT_DIV', 'PARAM', '凭证与对账', 490, '国内样品销项税除数', 'DEC', NULL, '销项税 = 数量 × 平台价 ÷ 本值 × 税率，如 1.13') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #180
+-- @stmt 新框架 04_seed.sql #181
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_EXPORT_FACTOR', 'PARAM', '凭证与对账', 500, '国外样品销项税成本倍数', 'DEC', NULL, '销项税 = 成本 × 本值 × 税率，如 1.5') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #181
+-- @stmt 新框架 04_seed.sql #182
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_WORTYPES', 'PARAM', '业务口径', 510, '委外工单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 50；改了要同步改费用池分摊范围的订单类型') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #182
+-- @stmt 新框架 04_seed.sql #183
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('REWORK_WORTYPES', 'PARAM', '业务口径', 520, '返工单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #183
+-- @stmt 新框架 04_seed.sql #184
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TRIAL_WORTYPES', 'PARAM', '业务口径', 530, '试打订单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 40') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #184
+-- @stmt 新框架 04_seed.sql #185
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TRIAL_ISSUE_BUSITYPES', 'PARAM', '业务口径', 540, '试打允许的领料业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 307,305') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #185
+-- @stmt 新框架 04_seed.sql #186
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_IN_BUSITYPE', 'PARAM', '业务口径', 550, '形态转换转入业务类型', 'STR', NULL, '@U_CIOTRN.Code，如 204（I05）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #186
+-- @stmt 新框架 04_seed.sql #187
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_OUT_BUSITYPE', 'PARAM', '业务口径', 560, '形态转换转出业务类型', 'STR', NULL, '@U_CIOTRN.Code，如 205（O05）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #187
+-- @stmt 新框架 04_seed.sql #188
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RETURN_BUSITYPES', 'PARAM', '业务口径', 570, '生产退料业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 304；收货单上用领料类业务类型（302、308、309 等）的行自动按退料处理，不用填') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #188
+-- @stmt 新框架 04_seed.sql #189
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_SALTYPES', 'PARAM', '业务口径', 580, '样品销售的业务类型', 'LIST', NULL, '@MTC_SALORDTYPE.U_BusiType 逗号分隔，如 样品销售') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #189
+-- @stmt 新框架 04_seed.sql #190
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CUST_DOM', 'PARAM', '业务口径', 590, '国内客户的客户类型', 'STR', NULL, '@MTC_SALORDTYPE.U_CustType，如 国内客户') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #190
+-- @stmt 新框架 04_seed.sql #191
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CUST_EXP', 'PARAM', '业务口径', 600, '国外客户的客户类型', 'STR', NULL, '@MTC_SALORDTYPE.U_CustType，如 国外客户') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #191
+-- @stmt 新框架 04_seed.sql #192
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM_DEF', 'C', '种子数据（04_seed.sql）；B1 @MTC_CA_PARAM 的 Name / U_Category / U_DataType / U_Hint 由 sl_import_costcfg.py --param 按它写入') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #192
+-- @stmt 新框架 04_seed.sql #193
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM_B1', 'C', 'B1 @MTC_CA_PARAM 的原样快照：P05 调 MTC_CA_P_PARAM_B1_SNAP 整表刷新，B1 保存时 MTC_CA_P_B1CFG_TN 逐行刷新；用来判断锁定（U_Locked = Y）的参数有没有被改，计算不读') WITH PRIMARY KEY
 
 @@
@@ -20815,6 +20819,38 @@ END
 -- 结果写 MTC_CA_R_CHECK（每项一行）和 MTC_CA_R_CHECK_DTL（问题明细，每项最多 CHECK_DTL_MAX 行）。
 -- 检查项的标题、是否阻断登记在 MTC_CA_C_CHECK；Active='N' 的记为 SKIP。
 -- =====================================================================
+-- 物料本期的单价来源（用户 2026-11-06，PRE-23 与 PRE-04 共用）：HasIn = 有计入加权单价的采购 / 完工等行；IsSrc = 这些行或期初能给出单价。
+-- 能给出单价 = 有带金额的入库、QCP_PRICED_IN 中非采购类的入库（完工、形态转换等，金额要算了才知道）或期初有数量有金额，
+-- 且 加权单价的分母 > 0（期初数量 + 计入加权单价的行，同 P30 InVal、P45）。0 金额的采购收货、收货后全退的物料给不出单价，盘盈等按加权价的行会是 0 成本。
+CREATE OR REPLACE FUNCTION "MTC_CA_F_QCP_SRC" (IN RunId BIGINT, IN PricedIn NVARCHAR(200))
+RETURNS TABLE ("ItemCode" NVARCHAR(50), "HasIn" NVARCHAR(1), "IsSrc" NVARCHAR(1))
+LANGUAGE SQLSCRIPT READS SQL DATA AS
+BEGIN
+    RETURN
+    SELECT X."ItemCode", MAX(X."HasIn") AS "HasIn",
+           CASE WHEN MAX(X."CanPrice") = 'Y' AND SUM(X."ValQty") > 0 THEN 'Y' ELSE 'N' END AS "IsSrc"
+      FROM (SELECT V."ItemCode",
+                   CASE WHEN V."IsFix" = 'Y' OR V."IsPriced" = 'Y' THEN 'Y' ELSE 'N' END AS "HasIn",
+                   -- 分母同 P30 的 InVal：固定价、完工、形态转换，加上生产退料、销售退货、销售取消单
+                   CASE WHEN V."IsFix" = 'Y' OR V."IsPriced" = 'Y' OR V."TransCode" = 'O06'
+                          OR (V."Canceled" = 'C' AND V."ObjType" IN ('15', '16'))
+                          OR (V."BusiClass" = 'B03' AND V."OrderEntry" IS NOT NULL AND V."Qty" > 0) THEN V."Qty" ELSE 0 END AS "ValQty",
+                   CASE WHEN V."Qty" > 0 AND V."SrcAmt" IS NOT NULL AND V."SrcAmt" <> 0 THEN 'Y'
+                        WHEN V."Qty" > 0 AND V."IsFix" = 'N' AND V."IsPriced" = 'Y' THEN 'Y'
+                        ELSE 'N' END AS "CanPrice"
+              FROM (SELECT "ItemCode", "Qty", "SrcAmt", "TransCode", "Canceled", "ObjType", "BusiClass", "OrderEntry",
+                           CASE WHEN "Src" IN ('OMRV', 'APDIF') OR "ObjType" IN ('20', '21', '18', '19') THEN 'Y' ELSE 'N' END AS "IsFix",
+                           CASE WHEN LOCATE(:PricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'Y' ELSE 'N' END AS "IsPriced"
+                      FROM "MTC_CA_S_LINE"
+                     WHERE "RunId" = :RunId AND "Qty" <> 0 AND IFNULL("NoCost", 'N') = 'N') V
+            UNION ALL
+            SELECT "ItemCode", 'N', "Qty", CASE WHEN "Qty" > 0 AND "Amount" <> 0 THEN 'Y' ELSE 'N' END
+              FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId) X
+     GROUP BY X."ItemCode";
+END
+
+@@
+-- @stmt 新框架 08_precheck.sql #2
 CREATE OR REPLACE PROCEDURE "MTC_CA_P_CHECK_PUT" (
     IN RunId   BIGINT,
     IN CheckId NVARCHAR(20),
@@ -20837,8 +20873,8 @@ BEGIN
       INTO blk, act, stage, title FROM "MTC_CA_C_CHECK" WHERE "CheckId" = :CheckId;
     -- 计算后校验（POST）不通过一律阻断，没有警告（用户 2026-10-14）；
     -- 例外：参数 POST_WARN_IDS 中的检查按 C_CHECK.IsBlock（POST-15 PUR 逐单据勾稽先只警告，用户 2026-10-30）
-    -- POST-16 费用波动固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
-    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
+    -- POST-16 费用波动、POST-17 加权价入库 0 成本固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
+    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
     SELECT COUNT(*) INTO cnt FROM :dtl;
 
     INSERT INTO "MTC_CA_R_CHECK" ("FcCode", "RunType", "Scenario", "RunId", "CheckId", "Stage", "Result", "IssueCnt", "IsBlock", "Msg", "CheckTime")
@@ -20860,7 +20896,7 @@ BEGIN
 END
 
 @@
--- @stmt 新框架 08_precheck.sql #2
+-- @stmt 新框架 08_precheck.sql #3
 -- 校验明细的单号：单据类型 + DocEntry → “类型-DocNum 单号”（SAP 里按 DocNum 查，用户 2026-10-29）；查不到单号时仍写“类型-DocEntry n”
 -- P10、P60、P75 共用，放在 08 是因为它最先部署
 CREATE OR REPLACE FUNCTION "MTC_CA_F_DOCKEY" (IN ObjType NVARCHAR(20), IN DocEntry INTEGER)
@@ -20888,7 +20924,7 @@ BEGIN
 END
 
 @@
--- @stmt 新框架 08_precheck.sql #3
+-- @stmt 新框架 08_precheck.sql #4
 -- 发出商品（P71 和 PRE-27 共用；放在这里是因为 08 比 16 先部署）
 -- 截至某日（含）已交货未开票的交货 / 独立退货行（口径同 CO6103），P71 用它取期末和期初（上期末）两份（用户 2026-10-15 对账列示期初 / 本期 / 期末）
 CREATE OR REPLACE FUNCTION "MTC_CA_F_GOODS_OPEN" (IN d DATE)
@@ -20955,7 +20991,7 @@ BEGIN
 END
 
 @@
--- @stmt 新框架 08_precheck.sql #4
+-- @stmt 新框架 08_precheck.sql #5
 -- 截至某日（含）交货 / 独立退货行的后续消耗：开票（INV 应收发票、RIN 应收贷项）、基于交货的退货（RET），取消单数量反号、经原单找到交货 / 退货行。
 -- Qty 与原行 DocQty 同号（交货的开票、退货为正，独立退货的贷项为负），所以 原行未清数量 = DocQty − SUM(Qty)，与 F_GOODS_OPEN 一致。
 -- P71 用它算 DN03 转出金额、尾差和发出商品余额（用户 2026-10-15：分次开票的尾差在全部消耗完时清掉）
@@ -20998,7 +21034,7 @@ BEGIN
 END
 
 @@
--- @stmt 新框架 08_precheck.sql #5
+-- @stmt 新框架 08_precheck.sql #6
 CREATE OR REPLACE PROCEDURE "MTC_CA_P10_PRECHECK" (IN RunId BIGINT, OUT BlockCnt INT)
 LANGUAGE SQLSCRIPT AS
 BEGIN
@@ -21059,12 +21095,9 @@ BEGIN
 
     -- PRE-04 没有原交货的销售退货：允许发生，只警告（用户 2026-10-13）；有期初维护价按维护价，没有按本期加权价（清单 S10）
     -- 原交货键在 P20_LINE 中确定：RDN1 标准来源是交货时用标准来源，否则用行上 U_BaseType='15' / U_BaseEntry / U_BaseLine
-    -- 物料没有维护价、也没有其他价格来源（与 PRE-23 同一口径：期初有数量有金额、本期有 QCP_PRICED_IN 入库或带金额的入库）时，
+    -- 物料没有维护价、也没有其他价格来源（与 PRE-23 同一口径 MTC_CA_F_QCP_SRC，2026-11-06）时，
     -- 加权价为 0，退货会按 0 成本入库，说明里写明（用户 2026-10-29）
-    s04 = SELECT DISTINCT "ItemCode" FROM "MTC_CA_S_LINE"
-           WHERE "RunId" = :RunId AND "Qty" > 0 AND IFNULL("NoCost", 'N') = 'N'
-             AND (("SrcAmt" IS NOT NULL AND "SrcAmt" <> 0) OR LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0)
-          UNION SELECT "ItemCode" FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId AND "Qty" > 0 AND "Amount" <> 0;
+    s04 = SELECT "ItemCode" FROM "MTC_CA_F_QCP_SRC"(:RunId, :pricedIn) WHERE "IsSrc" = 'Y';
     t04 = SELECT L."ObjType" || '-DocNum ' || L."DocNum" || '-LineNum ' || L."LineNum" AS "KeyCode",
                  L."ItemCode" || ' 退货没有原交货，' || CASE WHEN Q."ItemCode" IS NOT NULL THEN '按期初维护价'
                                                                  WHEN P."ItemCode" IS NOT NULL THEN '也没有期初维护价，按本期加权价'
@@ -22431,7 +22464,7 @@ COMMENT ON TABLE "MTC_CA_R_HOURS_NEED" IS '需要维护工时的产品（PRE-14 
 -- PRE-23 需要维护期初成本价的物料（用户 2026-10-13，替代旧 CAL_1001_CHECK 第 2 项的收集部分；只读，不写 @MTC_COST_QCPRICE）
 -- 判断：物料本期有要按单价计价的行（不是带固定金额的行、不是参数 QCP_PRICED_IN 中的入库、不是有原交货的销售退货），
 -- 且计算前没有任何价格来源——没有期初结存金额、没有 QCP_PRICED_IN 中的入库（采购、生产 / 委外 / 返工完工、形态转换）、
--- 没有带金额的入库、没有期初维护价。这些物料不维护价格，本期出库会按 0 或按迭代中偶然得到的价格计价（POST-07 事后报出）。
+-- 没有带金额的入库、没有期初维护价。0 金额的采购收货不算来源，加权单价的分母（期初数量 + 计入加权单价的行）要大于 0（MTC_CA_F_QCP_SRC，用户 2026-11-06）。这些物料不维护价格，本期出库会按 0 或按迭代中偶然得到的价格计价（POST-07 事后报出）。
 -- 首次出现 = 以前各期的新框架结果、期初承接、旧 0301 和本期期初都没有这个物料；建议价取以前最近一个账期不为 0 的单价，
 -- 都没有时取物料主数据最近采购价。结果写 MTC_CA_R_QCP_NEED（只做检查时也保留），PRE-23 明细最多 CHECK_DTL_MAX 行。
 -- 部署在 11 之后（读 R_ITEM 历史）；由 MTC_CA_P_RUN、MTC_CA_P_PRECHECK 在 P10 之后调用。
@@ -22445,17 +22478,14 @@ BEGIN
 
     ln = SELECT "LineId", "ItemCode", IFNULL("TransCode", '') AS "TransCode", "Qty",
                 "ObjType", "DocEntry", "DocNum", "LineNum", "DocDate", "BusiType", "WhsCode",
-                CASE WHEN "SrcAmt" IS NOT NULL AND "SrcAmt" <> 0 AND "Qty" > 0 THEN 'Y'
-                     WHEN "Qty" > 0 AND LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'Y'
-                     ELSE 'N' END AS "IsSrc",
                 CASE WHEN "SrcAmt" IS NOT NULL THEN 'N'
                      WHEN LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'N'
                      WHEN "TransCode" = 'O06' AND "BaseType" = '15' AND "BaseEntry" IS NOT NULL THEN 'N'   -- 与 P30 SRT 同一判断（2026-10-29）
                      ELSE 'Y' END AS "IsNeed"
            FROM "MTC_CA_S_LINE"
           WHERE "RunId" = :RunId AND "Qty" <> 0 AND IFNULL("NoCost", 'N') = 'N';
-    src = SELECT DISTINCT "ItemCode" FROM :ln WHERE "IsSrc" = 'Y'
-          UNION SELECT "ItemCode" FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId AND "Qty" > 0 AND "Amount" <> 0
+    fs = SELECT "ItemCode", "HasIn", "IsSrc" FROM "MTC_CA_F_QCP_SRC"(:RunId, :pricedIn);
+    src = SELECT "ItemCode" FROM :fs WHERE "IsSrc" = 'Y'
           UNION SELECT "ItemCode" FROM "MTC_CA_S_QCPRICE" WHERE "RunId" = :RunId AND "Price" <> 0;
     need = SELECT X."ItemCode", STRING_AGG(X."TransCode", ',' ORDER BY X."TransCode") AS "NeedTrans", SUM(X."Qty") AS "NeedQty"
              FROM (SELECT "ItemCode", "TransCode", SUM(ABS("Qty")) AS "Qty" FROM :ln
@@ -22521,13 +22551,15 @@ BEGIN
            LEFT(CASE WHEN S."LastFc" IS NULL THEN '首次出现（以前各期和本期期初都没有这个物料）'
                      ELSE '以前出现过（最近 ' || S."LastFc" || '），本期期初没有结存金额' END
                 || '；本期有 ' || IFNULL(D."Names", N."NeedTrans") || ' 要按单价计价'
-                || '，计算前没有采购 / 完工 / 形态转换入库，也没有期初维护价', 500),
+                || CASE WHEN H."ItemCode" IS NOT NULL THEN '，本期的采购 / 完工入库给不出单价（金额为 0 或已退回），也没有期初维护价'
+                        ELSE '，计算前没有采购 / 完工 / 形态转换入库，也没有期初维护价' END, 500),
            LEFT(D."Docs", 1000)
       FROM :need N
       LEFT JOIN "MTC_CA_S_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = N."ItemCode"
       LEFT JOIN (SELECT "ItemCode", MAX("FcCode") AS "LastFc" FROM :seen GROUP BY "ItemCode") S ON S."ItemCode" = N."ItemCode"
       LEFT JOIN :sugg G ON G."ItemCode" = N."ItemCode"
       LEFT JOIN :nd D ON D."ItemCode" = N."ItemCode"
+      LEFT JOIN (SELECT "ItemCode" FROM :fs WHERE "HasIn" = 'Y') H ON H."ItemCode" = N."ItemCode"
       LEFT JOIN "OITM" M ON M."ItemCode" = N."ItemCode";
     RowCnt := ::ROWCOUNT;
 
@@ -23515,6 +23547,17 @@ BEGIN
     -- POST-07 物料标记：负库存、兜底价、无价、尾差无处挤
     t07 = SELECT "ItemCode" AS "KeyCode", "Flags" AS "Info" FROM "MTC_CA_R_ITEM" WHERE "RunId" = :RunId AND "Flags" IS NOT NULL;
     CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-07', :t07, NULL);
+
+    -- POST-17 盘盈等按加权价的入库是 0 成本：物料算出的单价为 0（只有 0 金额收货，或期初数量有、金额为 0），固定只警告（用户 2026-11-06）。
+    -- 完全没有单价来源的（PriceSrc = ZERO）归 POST-07
+    t17 = SELECT L."ItemCode" AS "KeyCode", '单价为 0，' || L."Trans" || ' 按加权价入库 ' || TO_NVARCHAR(L."Qty") || '，都是 0 成本；请确认入库金额，或补期初维护价' AS "Info"
+            FROM (SELECT "ItemCode", SUM("Qty") AS "Qty", STRING_AGG("TransCode", '、') AS "Trans"
+                    FROM (SELECT "ItemCode", IFNULL("TransCode", '') AS "TransCode", SUM("Qty") AS "Qty" FROM "MTC_CA_R_LINE"
+                           WHERE "RunId" = :RunId AND "Cat" = 'WAVG' AND "Qty" > 0 GROUP BY "ItemCode", IFNULL("TransCode", ''))
+                   GROUP BY "ItemCode") L
+            JOIN "MTC_CA_R_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = L."ItemCode"
+           WHERE I."PriceSrc" IN ('WAVG', 'OPEN') AND I."PMat" + I."PMfg" + I."PLab" + I."PSub" = 0;
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-17', :t17, NULL);
 
     -- POST-14 物料成本异常（用户 2026-10-14）：单价、数量、金额异常，含小尾差和价格大幅波动；原为只警告，2026-10-14 起计算后校验不通过一律阻断。
     -- 单价 P = 本期加权单价四项之和；期初单价 = 期初金额 ÷ 期初数量。阈值：TAIL_MAX（零库存尾差）、TAIL_WARN（挤入出库行的尾差）、PRICE_JUMP_PCT（%）、PRICE_JUMP_AMT（影响金额下限）

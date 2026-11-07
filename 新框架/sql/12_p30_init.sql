@@ -24,7 +24,7 @@
 -- PRE-23 需要维护期初成本价的物料（用户 2026-10-13，替代旧 CAL_1001_CHECK 第 2 项的收集部分；只读，不写 @MTC_COST_QCPRICE）
 -- 判断：物料本期有要按单价计价的行（不是带固定金额的行、不是参数 QCP_PRICED_IN 中的入库、不是有原交货的销售退货），
 -- 且计算前没有任何价格来源——没有期初结存金额、没有 QCP_PRICED_IN 中的入库（采购、生产 / 委外 / 返工完工、形态转换）、
--- 没有带金额的入库、没有期初维护价。这些物料不维护价格，本期出库会按 0 或按迭代中偶然得到的价格计价（POST-07 事后报出）。
+-- 没有带金额的入库、没有期初维护价。0 金额的采购收货不算来源，加权单价的分母（期初数量 + 计入加权单价的行）要大于 0（MTC_CA_F_QCP_SRC，用户 2026-11-06）。这些物料不维护价格，本期出库会按 0 或按迭代中偶然得到的价格计价（POST-07 事后报出）。
 -- 首次出现 = 以前各期的新框架结果、期初承接、旧 0301 和本期期初都没有这个物料；建议价取以前最近一个账期不为 0 的单价，
 -- 都没有时取物料主数据最近采购价。结果写 MTC_CA_R_QCP_NEED（只做检查时也保留），PRE-23 明细最多 CHECK_DTL_MAX 行。
 -- 部署在 11 之后（读 R_ITEM 历史）；由 MTC_CA_P_RUN、MTC_CA_P_PRECHECK 在 P10 之后调用。
@@ -38,17 +38,14 @@ BEGIN
 
     ln = SELECT "LineId", "ItemCode", IFNULL("TransCode", '') AS "TransCode", "Qty",
                 "ObjType", "DocEntry", "DocNum", "LineNum", "DocDate", "BusiType", "WhsCode",
-                CASE WHEN "SrcAmt" IS NOT NULL AND "SrcAmt" <> 0 AND "Qty" > 0 THEN 'Y'
-                     WHEN "Qty" > 0 AND LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'Y'
-                     ELSE 'N' END AS "IsSrc",
                 CASE WHEN "SrcAmt" IS NOT NULL THEN 'N'
                      WHEN LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'N'
                      WHEN "TransCode" = 'O06' AND "BaseType" = '15' AND "BaseEntry" IS NOT NULL THEN 'N'   -- 与 P30 SRT 同一判断（2026-10-29）
                      ELSE 'Y' END AS "IsNeed"
            FROM "MTC_CA_S_LINE"
           WHERE "RunId" = :RunId AND "Qty" <> 0 AND IFNULL("NoCost", 'N') = 'N';
-    src = SELECT DISTINCT "ItemCode" FROM :ln WHERE "IsSrc" = 'Y'
-          UNION SELECT "ItemCode" FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId AND "Qty" > 0 AND "Amount" <> 0
+    fs = SELECT "ItemCode", "HasIn", "IsSrc" FROM "MTC_CA_F_QCP_SRC"(:RunId, :pricedIn);
+    src = SELECT "ItemCode" FROM :fs WHERE "IsSrc" = 'Y'
           UNION SELECT "ItemCode" FROM "MTC_CA_S_QCPRICE" WHERE "RunId" = :RunId AND "Price" <> 0;
     need = SELECT X."ItemCode", STRING_AGG(X."TransCode", ',' ORDER BY X."TransCode") AS "NeedTrans", SUM(X."Qty") AS "NeedQty"
              FROM (SELECT "ItemCode", "TransCode", SUM(ABS("Qty")) AS "Qty" FROM :ln
@@ -114,13 +111,15 @@ BEGIN
            LEFT(CASE WHEN S."LastFc" IS NULL THEN '首次出现（以前各期和本期期初都没有这个物料）'
                      ELSE '以前出现过（最近 ' || S."LastFc" || '），本期期初没有结存金额' END
                 || '；本期有 ' || IFNULL(D."Names", N."NeedTrans") || ' 要按单价计价'
-                || '，计算前没有采购 / 完工 / 形态转换入库，也没有期初维护价', 500),
+                || CASE WHEN H."ItemCode" IS NOT NULL THEN '，本期的采购 / 完工入库给不出单价（金额为 0 或已退回），也没有期初维护价'
+                        ELSE '，计算前没有采购 / 完工 / 形态转换入库，也没有期初维护价' END, 500),
            LEFT(D."Docs", 1000)
       FROM :need N
       LEFT JOIN "MTC_CA_S_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = N."ItemCode"
       LEFT JOIN (SELECT "ItemCode", MAX("FcCode") AS "LastFc" FROM :seen GROUP BY "ItemCode") S ON S."ItemCode" = N."ItemCode"
       LEFT JOIN :sugg G ON G."ItemCode" = N."ItemCode"
       LEFT JOIN :nd D ON D."ItemCode" = N."ItemCode"
+      LEFT JOIN (SELECT "ItemCode" FROM :fs WHERE "HasIn" = 'Y') H ON H."ItemCode" = N."ItemCode"
       LEFT JOIN "OITM" M ON M."ItemCode" = N."ItemCode";
     RowCnt := ::ROWCOUNT;
 

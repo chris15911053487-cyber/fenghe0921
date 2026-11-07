@@ -180,7 +180,7 @@ UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBl
 @@
 UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-22', 'PRE', 220, '暂估变动没有库存记录', '本期材料收货、退货、发票差额在计价仓库没有 OIVL 记录：PUR1/PUR2 记了存货科目，物料成本却不含（Q29）', 'N', 'S11') WITH PRIMARY KEY
 @@
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-23', 'PRE', 230, '需要维护期初成本价的物料', '本期有要按单价计价的变动（出库、其他入库、盘点、无原单退货等），计算前却没有任何价格来源（无期初结存金额、无采购 / 完工 / 形态转换入库、无维护价）；区分首次出现和以前出现过，给出建议价（以前最近一期单价，或最近采购价）。只列清单，不写 @MTC_COST_QCPRICE，在 B1 维护后重新检查（用户 2026-10-13）', 'N', 'S1') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-23', 'PRE', 230, '需要维护期初成本价的物料', '本期有要按单价计价的变动（出库、其他入库、盘点、无原单退货等），计算前却没有任何价格来源（无期初结存金额、无采购 / 完工 / 形态转换入库、无维护价；0 金额的采购收货不算来源，加权单价的分母（期初数量 + 计入加权单价的行）要大于 0）；区分首次出现和以前出现过，给出建议价（以前最近一期单价，或最近采购价）。只列清单，不写 @MTC_COST_QCPRICE，在 B1 维护后重新检查（用户 2026-10-13）', 'N', 'S1') WITH PRIMARY KEY
 @@
 UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('PRE-24', 'PRE', 240, '工单类型不能为空', '本期涉及的生产 / 委外 / 返工订单 U_OrdType 为空：分不到制造费用和人工，在产品对账（POST-06 / POST-13）也归不到对应科目（用户 2026-10-14）', 'Y', 'S6') WITH PRIMARY KEY
 @@
@@ -257,6 +257,8 @@ UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnNam
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('FEE_BASE_MONTHS', 'PARAM', '尾差与校验', 346, '费用波动基准月数', 'INT', NULL, 'POST-16 取本期之前最近几个账期的中位数，如 6；不足 3 个月不比较') WITH PRIMARY KEY
 @@
 UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-16', 'POST', 178, '制造 / 人工费用波动', '制造费用、人工费用（全部、各费用池）与本期之前最近 FEE_BASE_MONTHS 个账期的中位数比较，不含关单差异和历史委外转出：金额偏离基准，且也偏离“基准单位费用 × 本期产量”（产量能解释的不报）时报出，偏离 = 差额 ≥ FEE_DEV_AMT 且比例 > FEE_DEV_PCT；本期完全没有费用也报。用来发现单据做错、费用漏记或多记。固定只警告（用户 2026-11-06）', 'N', 'S6') WITH PRIMARY KEY
+@@
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-17', 'POST', 179, '加权价入库 0 成本', '盘盈、其他入库、无原单退货等按加权价入库的物料，算出的单价为 0（如只有 0 金额的采购收货，或期初有数量没有金额），这些入库都是 0 成本；固定只警告（用户 2026-11-06）。完全没有单价来源的归 POST-07', 'N', 'S1') WITH PRIMARY KEY
 @@
 UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-05', 'POST', 150, '配对金额', 'I05 = −O05；退货、取消单按原单成本；找不到原单按加权价兜底的行', 'Y', 'S3') WITH PRIMARY KEY
 @@

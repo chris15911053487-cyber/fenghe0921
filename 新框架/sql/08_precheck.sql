@@ -4,6 +4,36 @@
 -- 结果写 MTC_CA_R_CHECK（每项一行）和 MTC_CA_R_CHECK_DTL（问题明细，每项最多 CHECK_DTL_MAX 行）。
 -- 检查项的标题、是否阻断登记在 MTC_CA_C_CHECK；Active='N' 的记为 SKIP。
 -- =====================================================================
+-- 物料本期的单价来源（用户 2026-11-06，PRE-23 与 PRE-04 共用）：HasIn = 有计入加权单价的采购 / 完工等行；IsSrc = 这些行或期初能给出单价。
+-- 能给出单价 = 有带金额的入库、QCP_PRICED_IN 中非采购类的入库（完工、形态转换等，金额要算了才知道）或期初有数量有金额，
+-- 且 加权单价的分母 > 0（期初数量 + 计入加权单价的行，同 P30 InVal、P45）。0 金额的采购收货、收货后全退的物料给不出单价，盘盈等按加权价的行会是 0 成本。
+CREATE OR REPLACE FUNCTION "MTC_CA_F_QCP_SRC" (IN RunId BIGINT, IN PricedIn NVARCHAR(200))
+RETURNS TABLE ("ItemCode" NVARCHAR(50), "HasIn" NVARCHAR(1), "IsSrc" NVARCHAR(1))
+LANGUAGE SQLSCRIPT READS SQL DATA AS
+BEGIN
+    RETURN
+    SELECT X."ItemCode", MAX(X."HasIn") AS "HasIn",
+           CASE WHEN MAX(X."CanPrice") = 'Y' AND SUM(X."ValQty") > 0 THEN 'Y' ELSE 'N' END AS "IsSrc"
+      FROM (SELECT V."ItemCode",
+                   CASE WHEN V."IsFix" = 'Y' OR V."IsPriced" = 'Y' THEN 'Y' ELSE 'N' END AS "HasIn",
+                   -- 分母同 P30 的 InVal：固定价、完工、形态转换，加上生产退料、销售退货、销售取消单
+                   CASE WHEN V."IsFix" = 'Y' OR V."IsPriced" = 'Y' OR V."TransCode" = 'O06'
+                          OR (V."Canceled" = 'C' AND V."ObjType" IN ('15', '16'))
+                          OR (V."BusiClass" = 'B03' AND V."OrderEntry" IS NOT NULL AND V."Qty" > 0) THEN V."Qty" ELSE 0 END AS "ValQty",
+                   CASE WHEN V."Qty" > 0 AND V."SrcAmt" IS NOT NULL AND V."SrcAmt" <> 0 THEN 'Y'
+                        WHEN V."Qty" > 0 AND V."IsFix" = 'N' AND V."IsPriced" = 'Y' THEN 'Y'
+                        ELSE 'N' END AS "CanPrice"
+              FROM (SELECT "ItemCode", "Qty", "SrcAmt", "TransCode", "Canceled", "ObjType", "BusiClass", "OrderEntry",
+                           CASE WHEN "Src" IN ('OMRV', 'APDIF') OR "ObjType" IN ('20', '21', '18', '19') THEN 'Y' ELSE 'N' END AS "IsFix",
+                           CASE WHEN LOCATE(:PricedIn, ',' || IFNULL("TransCode", '') || ',') > 0 THEN 'Y' ELSE 'N' END AS "IsPriced"
+                      FROM "MTC_CA_S_LINE"
+                     WHERE "RunId" = :RunId AND "Qty" <> 0 AND IFNULL("NoCost", 'N') = 'N') V
+            UNION ALL
+            SELECT "ItemCode", 'N', "Qty", CASE WHEN "Qty" > 0 AND "Amount" <> 0 THEN 'Y' ELSE 'N' END
+              FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId) X
+     GROUP BY X."ItemCode";
+END
+@@
 CREATE OR REPLACE PROCEDURE "MTC_CA_P_CHECK_PUT" (
     IN RunId   BIGINT,
     IN CheckId NVARCHAR(20),
@@ -26,8 +56,8 @@ BEGIN
       INTO blk, act, stage, title FROM "MTC_CA_C_CHECK" WHERE "CheckId" = :CheckId;
     -- 计算后校验（POST）不通过一律阻断，没有警告（用户 2026-10-14）；
     -- 例外：参数 POST_WARN_IDS 中的检查按 C_CHECK.IsBlock（POST-15 PUR 逐单据勾稽先只警告，用户 2026-10-30）
-    -- POST-16 费用波动固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
-    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
+    -- POST-16 费用波动、POST-17 加权价入库 0 成本固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
+    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
     SELECT COUNT(*) INTO cnt FROM :dtl;
 
     INSERT INTO "MTC_CA_R_CHECK" ("FcCode", "RunType", "Scenario", "RunId", "CheckId", "Stage", "Result", "IssueCnt", "IsBlock", "Msg", "CheckTime")
@@ -240,12 +270,9 @@ BEGIN
 
     -- PRE-04 没有原交货的销售退货：允许发生，只警告（用户 2026-10-13）；有期初维护价按维护价，没有按本期加权价（清单 S10）
     -- 原交货键在 P20_LINE 中确定：RDN1 标准来源是交货时用标准来源，否则用行上 U_BaseType='15' / U_BaseEntry / U_BaseLine
-    -- 物料没有维护价、也没有其他价格来源（与 PRE-23 同一口径：期初有数量有金额、本期有 QCP_PRICED_IN 入库或带金额的入库）时，
+    -- 物料没有维护价、也没有其他价格来源（与 PRE-23 同一口径 MTC_CA_F_QCP_SRC，2026-11-06）时，
     -- 加权价为 0，退货会按 0 成本入库，说明里写明（用户 2026-10-29）
-    s04 = SELECT DISTINCT "ItemCode" FROM "MTC_CA_S_LINE"
-           WHERE "RunId" = :RunId AND "Qty" > 0 AND IFNULL("NoCost", 'N') = 'N'
-             AND (("SrcAmt" IS NOT NULL AND "SrcAmt" <> 0) OR LOCATE(:pricedIn, ',' || IFNULL("TransCode", '') || ',') > 0)
-          UNION SELECT "ItemCode" FROM "MTC_CA_S_OPEN" WHERE "RunId" = :RunId AND "Qty" > 0 AND "Amount" <> 0;
+    s04 = SELECT "ItemCode" FROM "MTC_CA_F_QCP_SRC"(:RunId, :pricedIn) WHERE "IsSrc" = 'Y';
     t04 = SELECT L."ObjType" || '-DocNum ' || L."DocNum" || '-LineNum ' || L."LineNum" AS "KeyCode",
                  L."ItemCode" || ' 退货没有原交货，' || CASE WHEN Q."ItemCode" IS NOT NULL THEN '按期初维护价'
                                                                  WHEN P."ItemCode" IS NOT NULL THEN '也没有期初维护价，按本期加权价'

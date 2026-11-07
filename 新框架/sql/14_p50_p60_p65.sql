@@ -236,6 +236,17 @@ BEGIN
     t07 = SELECT "ItemCode" AS "KeyCode", "Flags" AS "Info" FROM "MTC_CA_R_ITEM" WHERE "RunId" = :RunId AND "Flags" IS NOT NULL;
     CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-07', :t07, NULL);
 
+    -- POST-17 盘盈等按加权价的入库是 0 成本：物料算出的单价为 0（只有 0 金额收货，或期初数量有、金额为 0），固定只警告（用户 2026-11-06）。
+    -- 完全没有单价来源的（PriceSrc = ZERO）归 POST-07
+    t17 = SELECT L."ItemCode" AS "KeyCode", '单价为 0，' || L."Trans" || ' 按加权价入库 ' || TO_NVARCHAR(L."Qty") || '，都是 0 成本；请确认入库金额，或补期初维护价' AS "Info"
+            FROM (SELECT "ItemCode", SUM("Qty") AS "Qty", STRING_AGG("TransCode", '、') AS "Trans"
+                    FROM (SELECT "ItemCode", IFNULL("TransCode", '') AS "TransCode", SUM("Qty") AS "Qty" FROM "MTC_CA_R_LINE"
+                           WHERE "RunId" = :RunId AND "Cat" = 'WAVG' AND "Qty" > 0 GROUP BY "ItemCode", IFNULL("TransCode", ''))
+                   GROUP BY "ItemCode") L
+            JOIN "MTC_CA_R_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = L."ItemCode"
+           WHERE I."PriceSrc" IN ('WAVG', 'OPEN') AND I."PMat" + I."PMfg" + I."PLab" + I."PSub" = 0;
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-17', :t17, NULL);
+
     -- POST-14 物料成本异常（用户 2026-10-14）：单价、数量、金额异常，含小尾差和价格大幅波动；原为只警告，2026-10-14 起计算后校验不通过一律阻断。
     -- 单价 P = 本期加权单价四项之和；期初单价 = 期初金额 ÷ 期初数量。阈值：TAIL_MAX（零库存尾差）、TAIL_WARN（挤入出库行的尾差）、PRICE_JUMP_PCT（%）、PRICE_JUMP_AMT（影响金额下限）
     itm = SELECT "ItemCode", "OpenQty", "OpenMat" + "OpenMfg" + "OpenLab" + "OpenSub" AS "OpenAmt",

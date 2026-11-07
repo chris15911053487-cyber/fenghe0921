@@ -58,7 +58,7 @@ const FLOW = [
    amt: a => `${Math.abs(Number(a.BalDiff)) < 0.005 ? "期初＋入库−出库＝期末 ✓" : `<b class="bad">四项不平 ${fmtNum(a.BalDiff)}</b>`}<br>期末 ${yuan(a.EndAmt)}`},
   {k:"P60", t:"P60 计算后校验", x:310, y:752, w:270, h:104, codes:["P60"], d:"POST 校验，写指标快照",
    long:"执行计算后校验（不通过即阻断，结果保留供排查，处理前不能过账），并写本次运行的指标快照，供“运行比较”使用。",
-   proc:["MTC_CA_P60_POSTCHECK"], chk:["POST-01", "POST-02", "POST-03", "POST-04", "POST-05", "POST-07", "POST-14", "POST-16", "BOOT-01"], wr:"MTC_CA_R_CHECK、MTC_CA_R_CHECK_DTL、MTC_CA_RUN_KPI", old:"CAL_1004_CHECK(_LS)、CO4004、C01–C18", tab:"checks"},
+   proc:["MTC_CA_P60_POSTCHECK"], chk:["POST-01", "POST-02", "POST-03", "POST-04", "POST-05", "POST-07", "POST-14", "POST-16", "POST-17", "BOOT-01"], wr:"MTC_CA_R_CHECK、MTC_CA_R_CHECK_DTL、MTC_CA_RUN_KPI", old:"CAL_1004_CHECK(_LS)、CO4004、C01–C18", tab:"checks"},
   {k:"P65", t:"P65 新旧比对", x:620, y:752, w:270, h:104, codes:["P65"], d:"与旧框架同一账期比对",
    long:"旧框架同一账期已运行时，逐物料、逐订单比较新旧结果，差额 > 0.01 的写比对表并归因。", proc:["MTC_CA_P65_COMPARE"], wr:"MTC_CA_R_CMP", tab:"cmp"},
   {k:"P71", t:"P71 发出商品", x:930, y:752, w:270, h:104, codes:["P71"], d:"交货成本、未开票交货计提",
