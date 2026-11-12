@@ -1,6 +1,6 @@
 -- FH100 成本核算一次性部署包（由 新框架/tools/build_deploy.py 生成，不要手改）
--- 生成时间 2026-11-07 00:11；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
--- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 978 条语句。对象不带 schema 前缀，建在当前 schema。
+-- 生成时间 2026-11-11 20:21；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
+-- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 990 条语句。对象不带 schema 前缀，建在当前 schema。
 -- 语句之间用单独一行 @@ 分隔，每条以 "-- @stmt 说明" 开头。请用 部署包/ 里的执行程序执行（见 README.md）。
 -- 已有的表、索引、序列、旧模块视图和过程会跳过（不会覆盖）；新框架的视图、过程是 CREATE OR REPLACE，配置初值是 UPSERT。
 -- 未包含：MTC_COST_0302_INVNTDETAIL1_Backup_20260927（备份/测试对象）
@@ -18240,260 +18240,288 @@ UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBl
 
 @@
 -- @stmt 新框架 04_seed.sql #130
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-05', 'POST', 150, '配对金额', 'I05 = −O05；退货、取消单按原单成本；找不到原单按加权价兜底的行', 'Y', 'S3') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('ISSUE_DEV_PCT', '0000-00', '9999-99', '10', 'DEC', 'POST-20 单耗偏离的比例上限（%）：订单 × 材料累计领料数量与按计划应领相差超过它才报（用户 2026-11-11）') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 04_seed.sql #131
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('ISSUE_DEV_AMT', '0000-00', '9999-99', '500', 'DEC', 'POST-20 单耗偏离的影响金额下限（元，含）：偏离数量 × 物料本期单价达到本值才报（用户 2026-11-11）') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #132
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ISSUE_DEV_PCT', 'PARAM', '尾差与校验', 347, '单耗偏离报警比例', 'DEC', NULL, '%：POST-20 订单累计领料与按计划应领相差超过它才报，如 10') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #133
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ISSUE_DEV_AMT', 'PARAM', '尾差与校验', 348, '单耗偏离报警金额', 'DEC', NULL, '元（含）：POST-20 偏离数量 × 单价达到本值才报，如 500') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #134
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-18', 'POST', 141, '领料完整性', '① 按订单核对：收发存明细里挂订单的领料 / 退料行合计 = 订单本期领料（不含加工费）；订单不在本期订单清单时这些行的金额进不了在产品 ② 生产领料（B03）、完工入库（B01）类业务没挂订单的行，按普通出入库计价，不进任何订单。固定只警告（用户 2026-11-11）', 'N', 'S5') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #135
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-19', 'POST', 142, '完工没有材料', '本期有完工入库，但本级材料（完工成本 − 本级分摊制造、人工 − 加工费结转，同 R02 本级分摊·材料）≤ 0：没领料就入库、领料挂错订单，或退料多于领料。固定只警告（用户 2026-11-11）', 'N', 'S5') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #136
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-20', 'POST', 143, '单耗偏离', '订单 × 材料：累计净领料数量与按计划应领（订单用料计划数 ÷ 订单计划数 × 累计完工数）比较。少领：本期有完工或关单的订单都比；超领、计划外领料（替代料）只比已完工的订单（本期关单或累计完工 ≥ 计划数）。偏离比例 > ISSUE_DEV_PCT 且影响金额（偏离数量 × 本期单价）≥ ISSUE_DEV_AMT 才报；不含加工费和联产品。固定只警告（用户 2026-11-11）', 'N', 'S5') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #137
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-05', 'POST', 150, '配对金额', 'I05 = −O05；退货、取消单按原单成本；找不到原单按加权价兜底的行', 'Y', 'S3') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 04_seed.sql #138
 -- 数据字典：快照表（S 层）和配置表的数据来源（用户 2026-10-14，执行台“说明书 → 表与字段”显示、可搜索）
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ITEM', 'S', 'P20_ITEM：OITM 物料、OITB 物料组（U_ItemGrpType 车间类别）、OITT / ITT1 当前 BOM（算层级），MTC_CA_C_LEVEL_OVR 层级覆盖') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #132
+-- @stmt 新框架 04_seed.sql #139
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_LINE', 'S', 'P20_LINE：OIVL 库存记录（计价仓库 OWHS.U_IsCost=Y），交易类型取 MTC_VIEW_Document + @U_CIOTRN（59/60 的 U_TrsName）+ @MTC_COST_IOTYPE；采购收货 / 退货 / 发票 OPDN·PDN1、ORPD·RPD1、OPCH·PCH1、ORPC·RPC1；销售退货 RDN1；库存重估 @MTC_OMRV / @MTC_OMRV1；P20_AP 用 S_AP_MOVE 覆盖材料暂估金额') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #133
+-- @stmt 新框架 04_seed.sql #140
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER', 'S', 'P20_ORDER：OWOR 生产 / 委外订单（U_OrdType 工单类型）、@MTC_OWOR 返工单（U_OrdType、U_ItemCode、U_PlannedQty）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #134
+-- @stmt 新框架 04_seed.sql #141
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER_LINE', 'S', 'P20_ORDER：WOR1 生产订单行、@MTC_WOR1 返工单行（计划用料）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #135
+-- @stmt 新框架 04_seed.sql #142
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_EXP', 'S', 'P20_EXP：OJDT / JDT1 已过账凭证（人工科目 LAB_EXP、制造费用科目 MFG_EXP_PREFIX 开头，凭证代码在 EXP_JDT_TRANSCODES；取值见 B1 @MTC_CA_PARAM），@MTC_OMRV / @MTC_OMRV1 库存重估，OWOR / @MTC_OWOR 找订单') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #136
+-- @stmt 新框架 04_seed.sql #143
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_SUBFEE', 'S', 'P20_SUBFEE：委外加工费收货 OPDN / PDN1（U_BaseType / U_BaseEntry 指向生产收货 IGN1，U_OWORNum 找 OWOR）、退货 ORPD / RPD1，@MTC_OMRV / @MTC_OMRV1 中 U_BaseType=ProWW 的重估行，@MTC_OWOR 返工单') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #137
+-- @stmt 新框架 04_seed.sql #144
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_AP_MOVE', 'S', 'P20_AP：采购收货 OPDN / PDN1、采购退货 ORPD / RPD1、应付发票 OPCH / PCH1、应付贷项 ORPC / RPC1（暂估价 U_InitPrice / U_IsPrice / Price），OITM 判断库存物料，@MTC_COST_IOTYPE') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #138
+-- @stmt 新框架 04_seed.sql #145
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_HOURS', 'S', 'P20_MISC：B1 生产工时 @MTC_COST_TIME（表头 U_FcCode 账期、Canceled）+ @MTC_COST_TIME1（行 U_ItemCode 物料、U_Time 单位工时）；同一物料多行取最大值（PRE-13 报出）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #139
+-- @stmt 新框架 04_seed.sql #146
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_QCPRICE', 'S', 'P20_MISC：B1 期初单价维护 @MTC_COST_QCPRICE（表头 U_FcCode）+ @MTC_COST_QCPRICE1（行 U_ItemCode、U_Price）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #140
+-- @stmt 新框架 04_seed.sql #147
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_OPEN', 'S', 'P20_OPEN：上期是承接账期时取 MTC_CA_BOOT_ITEM（旧框架 0301 期末，P_BOOTSTRAP 写入，料工费按 BOOT_RATIO 拆分）；否则取上期最近一次成功正式运行的 R_ITEM 期末') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #141
+-- @stmt 新框架 04_seed.sql #148
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_S_ORDER_OPEN', 'S', 'P20_OPEN：上期是承接账期时取 MTC_CA_BOOT_ORDER_MAT（旧框架 CO4011 / ZCP1，按领用材料的 BOOT_RATIO 拆分料工费）；否则取上期最近一次成功正式运行的 R_ORDER_MAT 累计数（未关闭订单）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #142
+-- @stmt 新框架 04_seed.sql #149
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL', 'C', 'P05：B1 @MTC_CA_POOL（Code、Name、U_IsDefault、U_Descr）有数据时每次运行前整表覆盖；没有时用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #143
+-- @stmt 新框架 04_seed.sql #150
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL_SRC', 'C', 'P05：B1 @MTC_CA_POOL1（U_OcrCode、U_FromFc、U_ToFc）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #144
+-- @stmt 新框架 04_seed.sql #151
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_POOL_TGT', 'C', 'P05：B1 @MTC_CA_POOL2（U_MatchBy、U_MatchVal、U_WorTypes、U_FromFc、U_ToFc）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #145
+-- @stmt 新框架 04_seed.sql #152
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_ACCT', 'C', 'MFG_EXP_PREFIX / LAB_EXP 两行由 P05 从 B1 @MTC_CA_PARAM（没有时读旧 @MTC_CA_EXPSET1）同步（有数据时）；其余科目用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #146
+-- @stmt 新框架 04_seed.sql #153
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM', 'C', 'MTC_CA_C_PARAM_DEF 登记的参数由 P05 从 B1 @MTC_CA_PARAM（没有时读旧 @MTC_CA_EXPSET1）同步，B1 里出现的以 B1 为准；CLOSE_DIF_POOL 取 @MTC_CA_POOL.U_IsCloseDif=Y 的池（有数据时）；其余参数用种子值') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #147
+-- @stmt 新框架 04_seed.sql #154
 UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JV_REV_TRANSCODES', '0000-00', '9999-99', ',AR03,AR04,', 'LIST', '生成 SAP 凭单时下月初自动冲销的凭证代码：凭单勾选冲销（OBTF.AutoStorno），冲销日期 = 下一账期第一天；同旧 COJZ_01/03 的 U_IsRev（用户 2026-10-19）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #148
+-- @stmt 新框架 04_seed.sql #155
 -- 参数目录（用户 2026-10-28：参数改在 B1 @MTC_CA_PARAM 平铺表格维护）。新增可在 B1 维护的参数时在这里加一行
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('MFG_EXP_PREFIX', 'ACCT', '费用归集', 110, '制造费用科目前缀', 'STR', NULL, '凭证里以它开头的科目计入制造费用，如 5101') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #149
+-- @stmt 新框架 04_seed.sql #156
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LAB_EXP', 'ACCT', '费用归集', 120, '人工费用科目', 'STR', NULL, '科目代码，如 500102') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #150
+-- @stmt 新框架 04_seed.sql #157
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('EXP_JDT_TRANSCODES', 'PARAM', '费用归集', 130, '计入费用池的凭证代码', 'LIST', NULL, 'OJDT.TransCode，逗号分隔；“空”= 没有凭证代码的手工凭证。如 空,PP03,MR03,MR11,MR12') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #151
+-- @stmt 新框架 04_seed.sql #158
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SUBFEE_ITEM', 'PARAM', '费用归集', 140, '委外加工费物料', 'STR', NULL, '物料代码，如 X0510001') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #152
+-- @stmt 新框架 04_seed.sql #159
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('START_FC', 'PARAM', '计算控制', 210, '新框架起始账期', 'FC', NULL, 'YYYY-MM。上线后不要改，会打乱期初承接') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #153
+-- @stmt 新框架 04_seed.sql #160
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('BOOTSTRAP_FC', 'PARAM', '计算控制', 220, '期初承接账期', 'FC', NULL, 'YYYY-MM，从旧框架该期结果取期初。上线后不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #154
+-- @stmt 新框架 04_seed.sql #161
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_PRICE', 'PARAM', '计算控制', 230, '收敛标准：单价', 'DEC', NULL, '物料单价两轮之差的上限，如 0.000001；不清楚不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #155
+-- @stmt 新框架 04_seed.sql #162
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_AMT', 'PARAM', '计算控制', 240, '收敛标准：金额', 'DEC', NULL, '费用池、关单差异两轮之差的上限（元），如 0.01；不清楚不要改') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #156
+-- @stmt 新框架 04_seed.sql #163
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('MAX_ITER', 'PARAM', '计算控制', 250, '最大迭代轮数', 'INT', NULL, '整数，超过仍不收敛则不写结果，如 50') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #157
+-- @stmt 新框架 04_seed.sql #164
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ITER_TRACE_TOP', 'PARAM', '计算控制', 252, '迭代明细记录物料数', 'INT', NULL, '整数，每轮记录单价变化最大的前 N 个物料，排查不收敛用，如 30；0 = 不记') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #158
+-- @stmt 新框架 04_seed.sql #165
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('KEEP_NOCONV', 'PARAM', '计算控制', 254, '未收敛 / 出错时保留中间结果', 'STR', 'Y,N', 'Y = 未收敛或迭代及以后出错时，保留本次快照和最后一轮中间结果（可在执行台查看、导出排查），下次成功运行时自动删除；N = 删除') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #159
+-- @stmt 新框架 04_seed.sql #166
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LEVEL_GUARD', 'PARAM', '计算控制', 260, '层级计算保护上限', 'INT', NULL, '整数，防循环引用，不是业务层数，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #160
+-- @stmt 新框架 04_seed.sql #167
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('QCP_PRICED_IN', 'PARAM', '计算控制', 270, 'PRE-23 价格来源入库类型', 'LIST', NULL, '交易类型逗号分隔，如 I01,I03,I05,I07,I08,I09,I90') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #161
+-- @stmt 新框架 04_seed.sql #168
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('LEGACY_INITPRICE_DATE', 'PARAM', '计算控制', 280, '按 U_InitPrice 取成本的截止日', 'DATE', NULL, 'YYYY-MM-DD，该日及以前的交货 / 退货按行上 U_InitPrice 取成本') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #162
+-- @stmt 新框架 04_seed.sql #169
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TAIL_MAX', 'PARAM', '尾差与校验', 310, '零库存尾差结转上限', 'DEC', NULL, '元（含）：期末数量 0、金额在 ± 本值以内的结转 640101（JZ04），如 0.02') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #163
+-- @stmt 新框架 04_seed.sql #170
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TAIL_WARN', 'PARAM', '尾差与校验', 320, '尾差报警下限', 'DEC', NULL, '元（含）：POST-14 挤进出库行的尾差绝对值达到本值才报，如 0.1') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #164
+-- @stmt 新框架 04_seed.sql #171
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRICE_JUMP_PCT', 'PARAM', '尾差与校验', 330, '价格波动报警比例', 'DEC', NULL, '%：POST-14 价格波动 / 期末单价偏离，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #165
+-- @stmt 新框架 04_seed.sql #172
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRICE_JUMP_AMT', 'PARAM', '尾差与校验', 340, '价格波动报警金额', 'DEC', NULL, '元：POST-14 价格波动的影响金额下限，如 100') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #166
+-- @stmt 新框架 04_seed.sql #173
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CHECK_DTL_MAX', 'PARAM', '尾差与校验', 350, '每项校验保留明细行数', 'INT', NULL, '整数，如 200') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #167
+-- @stmt 新框架 04_seed.sql #174
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('ACCT_CHECK_BUSITYPES', 'PARAM', '尾差与校验', 360, 'PRE-25 核对科目的业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 210') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #168
+-- @stmt 新框架 04_seed.sql #175
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PRE08_EXCL_WHS', 'PARAM', '尾差与校验', 370, 'PRE-08 不报的不计价仓库', 'LIST', NULL, '仓库代码逗号分隔，可以为空，如 S300,WX01') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #169
+-- @stmt 新框架 04_seed.sql #176
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('COST_TRANSCODES', 'PARAM', '凭证与对账', 410, '成本模块生成的凭证代码', 'LIST', NULL, '凭证代码逗号分隔；要和代码实际生成的一致，不要随意增删') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #170
+-- @stmt 新框架 04_seed.sql #177
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JV_REV_TRANSCODES', 'PARAM', '凭证与对账', 420, '凭单下月初自动冲销的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 AR03,AR04') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #171
+-- @stmt 新框架 04_seed.sql #178
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RECON_BLOCK_ON', 'PARAM', '凭证与对账', 430, '财务对账按哪列差额阻断', 'STR', 'CUR,END', 'CUR 本期差额（期初差额只列示）/ END 期末差额') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #172
+-- @stmt 新框架 04_seed.sql #179
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RECON_COSTONLY_AREAS', 'PARAM', '凭证与对账', 440, '只比较成本凭证的对账项', 'LIST', NULL, '可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP，逗号分隔') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #173
+-- @stmt 新框架 04_seed.sql #180
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR2_REV_ACCTS', 'PARAM', '凭证与对账', 450, 'PUR2 冲回发票凭证的科目', 'LIST', NULL, '科目或前 4 位，逗号分隔，如 1403,1405,1409,220202') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #174
+-- @stmt 新框架 04_seed.sql #181
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR3_REV_ACCTS', 'PARAM', '凭证与对账', 460, 'PUR3 冲回发票凭证的科目', 'LIST', NULL, '科目或前 4 位，逗号分隔，如 140802') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #175
+-- @stmt 新框架 04_seed.sql #182
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('PUR_STDVAR_ACCTS', 'PARAM', '凭证与对账', 465, 'PUR 勾稽：标准成本差异科目（补充）', 'LIST', NULL, '除物料组的价格差异科目、差异科目外，B1 标准成本凭证还会用到的差异科目；POST-15 要求这些科目在采购单据上净额为 0。逗号分隔，可空') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #176
+-- @stmt 新框架 04_seed.sql #183
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('INITPRICE_NEW_FROM', 'PARAM', '凭证与对账', 466, '指定单价 U_InitPrice 报出起始日', 'DATE', NULL, 'YYYY-MM-DD；这天及以后的收货 / 退货用了 U_InitPrice 时 POST-15 报出，如 2026-01-01') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #177
+-- @stmt 新框架 04_seed.sql #184
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('POST_WARN_IDS', 'PARAM', '计算控制', 285, '只警告的计算后校验', 'LIST', NULL, '校验编号，逗号分隔，如 POST-15；不在这里的计算后校验一律阻断') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #178
+-- @stmt 新框架 04_seed.sql #185
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TB_EXTRA_ACCTS', 'PARAM', '凭证与对账', 470, '科目余额表额外列出的科目', 'LIST', NULL, '科目或科目前缀，逗号分隔，可以为空，如 6602,1122') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #179
+-- @stmt 新框架 04_seed.sql #186
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_VAT_RATE', 'PARAM', '凭证与对账', 480, '样品视同销售税率', 'DEC', NULL, '小数，如 0.13') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #180
+-- @stmt 新框架 04_seed.sql #187
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_VAT_DIV', 'PARAM', '凭证与对账', 490, '国内样品销项税除数', 'DEC', NULL, '销项税 = 数量 × 平台价 ÷ 本值 × 税率，如 1.13') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #181
+-- @stmt 新框架 04_seed.sql #188
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_EXPORT_FACTOR', 'PARAM', '凭证与对账', 500, '国外样品销项税成本倍数', 'DEC', NULL, '销项税 = 成本 × 本值 × 税率，如 1.5') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #182
+-- @stmt 新框架 04_seed.sql #189
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_WORTYPES', 'PARAM', '业务口径', 510, '委外工单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 50；改了要同步改费用池分摊范围的订单类型') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #183
+-- @stmt 新框架 04_seed.sql #190
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('REWORK_WORTYPES', 'PARAM', '业务口径', 520, '返工单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 30') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #184
+-- @stmt 新框架 04_seed.sql #191
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TRIAL_WORTYPES', 'PARAM', '业务口径', 530, '试打订单的订单类型', 'LIST', NULL, 'U_OrdType 逗号分隔，如 40') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #185
+-- @stmt 新框架 04_seed.sql #192
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('TRIAL_ISSUE_BUSITYPES', 'PARAM', '业务口径', 540, '试打允许的领料业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 307,305') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #186
+-- @stmt 新框架 04_seed.sql #193
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_IN_BUSITYPE', 'PARAM', '业务口径', 550, '形态转换转入业务类型', 'STR', NULL, '@U_CIOTRN.Code，如 204（I05）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #187
+-- @stmt 新框架 04_seed.sql #194
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CONV_OUT_BUSITYPE', 'PARAM', '业务口径', 560, '形态转换转出业务类型', 'STR', NULL, '@U_CIOTRN.Code，如 205（O05）') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #188
+-- @stmt 新框架 04_seed.sql #195
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RETURN_BUSITYPES', 'PARAM', '业务口径', 570, '生产退料业务类型', 'LIST', NULL, '@U_CIOTRN.Code 逗号分隔，如 304；收货单上用领料类业务类型（302、308、309 等）的行自动按退料处理，不用填') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #189
+-- @stmt 新框架 04_seed.sql #196
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('SAMPLE_SALTYPES', 'PARAM', '业务口径', 580, '样品销售的业务类型', 'LIST', NULL, '@MTC_SALORDTYPE.U_BusiType 逗号分隔，如 样品销售') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #190
+-- @stmt 新框架 04_seed.sql #197
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CUST_DOM', 'PARAM', '业务口径', 590, '国内客户的客户类型', 'STR', NULL, '@MTC_SALORDTYPE.U_CustType，如 国内客户') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #191
+-- @stmt 新框架 04_seed.sql #198
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('CUST_EXP', 'PARAM', '业务口径', 600, '国外客户的客户类型', 'STR', NULL, '@MTC_SALORDTYPE.U_CustType，如 国外客户') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #192
+-- @stmt 新框架 04_seed.sql #199
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM_DEF', 'C', '种子数据（04_seed.sql）；B1 @MTC_CA_PARAM 的 Name / U_Category / U_DataType / U_Hint 由 sl_import_costcfg.py --param 按它写入') WITH PRIMARY KEY
 
 @@
--- @stmt 新框架 04_seed.sql #193
+-- @stmt 新框架 04_seed.sql #200
 UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_C_PARAM_B1', 'C', 'B1 @MTC_CA_PARAM 的原样快照：P05 调 MTC_CA_P_PARAM_B1_SNAP 整表刷新，B1 保存时 MTC_CA_P_B1CFG_TN 逐行刷新；用来判断锁定（U_Locked = Y）的参数有没有被改，计算不读') WITH PRIMARY KEY
 
 @@
@@ -20874,7 +20902,8 @@ BEGIN
     -- 计算后校验（POST）不通过一律阻断，没有警告（用户 2026-10-14）；
     -- 例外：参数 POST_WARN_IDS 中的检查按 C_CHECK.IsBlock（POST-15 PUR 逐单据勾稽先只警告，用户 2026-10-30）
     -- POST-16 费用波动、POST-17 加权价入库 0 成本固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
-    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
+    -- POST-18 领料完整性、POST-19 完工没有材料、POST-20 单耗偏离同样固定只警告（用户 2026-11-11）
+    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,,POST-18,,POST-19,,POST-20,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
     SELECT COUNT(*) INTO cnt FROM :dtl;
 
     INSERT INTO "MTC_CA_R_CHECK" ("FcCode", "RunType", "Scenario", "RunId", "CheckId", "Stage", "Result", "IssueCnt", "IsBlock", "Msg", "CheckTime")
@@ -23444,6 +23473,7 @@ BEGIN
     DECLARE boot NVARCHAR(10); DECLARE prev NVARCHAR(10);
     DECLARE tailMax DECIMAL(19,6); DECLARE tailWarn DECIMAL(19,6); DECLARE pjPct DECIMAL(19,6); DECLARE pjAmt DECIMAL(19,6);
     DECLARE fdPct DECIMAL(19,6); DECLARE fdAmt DECIMAL(19,6); DECLARE fdMon INT; DECLARE fdN INT; DECLARE fdMsg NVARCHAR(1000);
+    DECLARE idPct DECIMAL(19,6); DECLARE idAmt DECIMAL(19,6);
     CALL "MTC_CA_P_RUN_CTX"(:RunId, fc, rt, scen, d0, d1);
     boot := "MTC_CA_F_PARAM"('BOOTSTRAP_FC', :fc);
     tailMax := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('TAIL_MAX', :fc), '0.02'), 19, 6);
@@ -23453,6 +23483,8 @@ BEGIN
     fdPct := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('FEE_DEV_PCT', :fc), '30'), 19, 6);
     fdAmt := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('FEE_DEV_AMT', :fc), '50000'), 19, 6);
     fdMon := TO_INTEGER(IFNULL("MTC_CA_F_PARAM"('FEE_BASE_MONTHS', :fc), '6'));
+    idPct := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('ISSUE_DEV_PCT', :fc), '10'), 19, 6);
+    idAmt := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('ISSUE_DEV_AMT', :fc), '500'), 19, 6);
     SELECT MAX("Code") INTO prev FROM "OFPR" WHERE "Code" < :fc;
 
     -- POST-01 期末数量 = B1（计价仓库 OIVL 截至期末）
@@ -23558,6 +23590,79 @@ BEGIN
             JOIN "MTC_CA_R_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = L."ItemCode"
            WHERE I."PriceSrc" IN ('WAVG', 'OPEN') AND I."PMat" + I."PMfg" + I."PLab" + I."PSub" = 0;
     CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-17', :t17, NULL);
+
+    -- POST-18 领料完整性（用户 2026-11-11，只警告）：订单本期领料（R_ORDER_MAT）是从挂订单的领料 / 退料行汇总的，这里查掉出去的行：
+    --   ① 按订单核对 收发存明细的领料 / 退料行合计 = 订单本期领料（不含加工费）；订单不在本期订单清单时这些行的金额进不了在产品
+    --   ② 生产领料（B03）、完工入库（B01）类业务没挂订单的行：按普通出入库计价，不进任何订单
+    iss = SELECT "OrderType", "OrderEntry", -SUM("Amount") AS "Amt", COUNT(*) AS "Cnt"
+            FROM "MTC_CA_R_LINE" WHERE "RunId" = :RunId AND "Cat" IN ('ISSUE', 'RTN304') GROUP BY "OrderType", "OrderEntry";
+    omat = SELECT "OrderType", "OrderEntry", SUM("IssMat" + "IssMfg" + "IssLab" + "IssSub") AS "Amt"
+             FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE' GROUP BY "OrderType", "OrderEntry";
+    t18 = SELECT "MTC_CA_F_DOCKEY"(K."OrderType", K."OrderEntry") AS "KeyCode",
+                 CASE WHEN O."OrderEntry" IS NULL
+                      THEN '订单不在本期订单清单：领料 / 退料 ' || TO_NVARCHAR(IFNULL(L."Cnt", 0)) || ' 行，金额 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0), 2)) || ' 没进在产品'
+                      ELSE '收发存明细领料 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0), 2)) || '，订单本期领料 ' || TO_NVARCHAR(ROUND(IFNULL(M."Amt", 0), 2))
+                           || '，差 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0) - IFNULL(M."Amt", 0), 2)) END AS "Info"
+            FROM (SELECT "OrderType", "OrderEntry" FROM :iss UNION SELECT "OrderType", "OrderEntry" FROM :omat) K
+            LEFT JOIN :iss L ON L."OrderType" = K."OrderType" AND L."OrderEntry" = K."OrderEntry"
+            LEFT JOIN :omat M ON M."OrderType" = K."OrderType" AND M."OrderEntry" = K."OrderEntry"
+            LEFT JOIN "MTC_CA_R_ORDER" O ON O."RunId" = :RunId AND O."OrderType" = K."OrderType" AND O."OrderEntry" = K."OrderEntry"
+           WHERE O."OrderEntry" IS NULL OR ABS(IFNULL(L."Amt", 0) - IFNULL(M."Amt", 0)) > 0.05
+          UNION ALL
+          SELECT "MTC_CA_F_DOCKEY"(S."ObjType", S."DocEntry") || '-LineNum ' || IFNULL(TO_NVARCHAR(S."LineNum"), ''),
+                 CASE WHEN S."BusiClass" = 'B03' THEN '生产领料类' ELSE '完工入库类' END || '业务（' || IFNULL(S."BusiType", '') || '）没挂订单：'
+                 || L."ItemCode" || ' 数量 ' || TO_NVARCHAR(L."Qty") || '，金额 ' || TO_NVARCHAR(ROUND(L."Amount", 2)) || '，按普通出入库计价，不进任何订单'
+            FROM "MTC_CA_R_LINE" L JOIN "MTC_CA_S_LINE" S ON S."RunId" = L."RunId" AND S."LineId" = L."LineId"
+           WHERE L."RunId" = :RunId AND S."BusiClass" IN ('B01', 'B03') AND S."OrderEntry" IS NULL AND L."Cat" <> 'NOCOST';
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-18', :t18, NULL);
+
+    -- POST-19 完工没有材料（用户 2026-11-11，只警告）：本期有完工入库，本级材料 ≤ 0（本级材料 = 完工成本 − 本级分摊制造 − 人工 − 加工费结转，同 R02）：
+    --   没领料就入库、领料挂错订单，或退料多于领料。“累计完工达计划仍有在产品”不用另查：这时结转比例为 1（P30 Ratio），在产品必然为 0
+    t19 = SELECT "MTC_CA_F_DOCKEY"(O."OrderType", O."OrderEntry") AS "KeyCode",
+                 O."ItemCode" || ' 本期完工 ' || TO_NVARCHAR(O."RecvQty") || '，本级材料 '
+                 || TO_NVARCHAR(ROUND(O."CostAmt" - O."AllocMfg" - O."AllocLab" - IFNULL(F."CarSub", 0), 2))
+                 || CASE WHEN M."OrderEntry" IS NULL THEN '，订单没有任何领料' ELSE '' END AS "Info"
+            FROM "MTC_CA_R_ORDER" O
+            LEFT JOIN "MTC_CA_R_ORDER_MAT" F ON F."RunId" = O."RunId" AND F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" AND F."ItemCode" = '#SUBFEE'
+            LEFT JOIN (SELECT DISTINCT "OrderType", "OrderEntry" FROM "MTC_CA_R_ORDER_MAT"
+                        WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE' AND "OpenIssQty" + "IssQty" <> 0) M
+              ON M."OrderType" = O."OrderType" AND M."OrderEntry" = O."OrderEntry"
+           WHERE O."RunId" = :RunId AND O."RecvQty" > 0
+             AND O."CostAmt" - O."AllocMfg" - O."AllocLab" - IFNULL(F."CarSub", 0) <= 0.005;
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-19', :t19, NULL);
+
+    -- POST-20 单耗偏离（用户 2026-11-11，只警告）：订单 × 材料，累计净领料数量 与 按计划应领 = 订单用料计划数（S_ORDER_LINE.PlannedQty，WOR1 / @MTC_WOR1）÷ 订单计划数 × 累计完工数 比较，
+    --   口径同 P30 结转比例的单位计划用量；用订单自己的用料计划而不是当前 BOM，返工单、委外单也能比。
+    --   少领：本期有完工或本期关单的订单都比；超领、计划外领料（订单用料里没有或计划为 0 的材料）只比已完工的（本期关单，或累计完工 ≥ 计划数），
+    --   没完工前多领的料还在产线上。影响金额 = 偏离数量 × 物料本期单价；偏离比例 > ISSUE_DEV_PCT 且影响金额 ≥ ISSUE_DEV_AMT 才报。
+    --   不含加工费；订单计划数 ≤ 0、计划用量为负（联产品 / 副产品）的不比。
+    pl = SELECT "OrderType", "OrderEntry", "ItemCode", SUM("PlannedQty") AS "Qty"
+           FROM "MTC_CA_S_ORDER_LINE" WHERE "RunId" = :RunId GROUP BY "OrderType", "OrderEntry", "ItemCode";
+    dev = SELECT O."OrderType", O."OrderEntry", O."ItemCode" AS "Prod", K."ItemCode",
+                 CASE WHEN O."ClosedInFc" = 'Y' OR O."PrevRecvQty" + O."RecvQty" >= O."PlannedQty" - 0.000001 THEN 'Y' ELSE 'N' END AS "Done",
+                 IFNULL(M."OpenIssQty" + M."IssQty", 0) AS "Act",
+                 IFNULL((O."PrevRecvQty" + O."RecvQty") * P."Qty" / O."PlannedQty", 0) AS "Need",
+                 IFNULL(I."PMat" + I."PMfg" + I."PLab" + I."PSub", 0) AS "Price"
+            FROM "MTC_CA_R_ORDER" O
+            JOIN (SELECT "OrderType", "OrderEntry", "ItemCode" FROM :pl
+                  UNION SELECT "OrderType", "OrderEntry", "ItemCode" FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE') K
+              ON K."OrderType" = O."OrderType" AND K."OrderEntry" = O."OrderEntry"
+            LEFT JOIN :pl P ON P."OrderType" = K."OrderType" AND P."OrderEntry" = K."OrderEntry" AND P."ItemCode" = K."ItemCode"
+            LEFT JOIN "MTC_CA_R_ORDER_MAT" M ON M."RunId" = O."RunId" AND M."OrderType" = K."OrderType" AND M."OrderEntry" = K."OrderEntry" AND M."ItemCode" = K."ItemCode"
+            LEFT JOIN "MTC_CA_R_ITEM" I ON I."RunId" = O."RunId" AND I."ItemCode" = K."ItemCode"
+           WHERE O."RunId" = :RunId AND IFNULL(O."PlannedQty", 0) > 0 AND IFNULL(P."Qty", 0) >= 0
+             AND (O."RecvQty" > 0 OR (O."ClosedInFc" = 'Y' AND O."PrevRecvQty" + O."RecvQty" > 0));
+    t20 = SELECT "MTC_CA_F_DOCKEY"("OrderType", "OrderEntry") || '-' || "ItemCode" AS "KeyCode",
+                 CASE WHEN "Need" = 0 THEN '计划外领料（订单用料里没有，替代料或多领）' WHEN "Act" < "Need" THEN '少领' ELSE '超领' END
+                 || '：产品 ' || "Prod" || '，累计领料 ' || TO_NVARCHAR(ROUND("Act", 6)) || '，按计划应领 ' || TO_NVARCHAR(ROUND("Need", 6))
+                 || CASE WHEN "Need" <> 0 THEN '，偏离 ' || TO_NVARCHAR(ROUND(("Act" - "Need") * 100 / "Need", 1)) || '%' ELSE '' END
+                 || '，影响约 ' || TO_NVARCHAR(ROUND(ABS("Act" - "Need") * "Price", 2)) AS "Info"
+            FROM :dev
+           WHERE ABS("Act" - "Need") * "Price" >= :idAmt
+             AND (("Need" = 0 AND "Done" = 'Y' AND "Act" > 0)
+               OR ("Need" > 0 AND "Act" < "Need" AND ("Need" - "Act") * 100 / "Need" > :idPct)
+               OR ("Need" > 0 AND "Done" = 'Y' AND "Act" > "Need" AND ("Act" - "Need") * 100 / "Need" > :idPct));
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-20', :t20, NULL);
 
     -- POST-14 物料成本异常（用户 2026-10-14）：单价、数量、金额异常，含小尾差和价格大幅波动；原为只警告，2026-10-14 起计算后校验不通过一律阻断。
     -- 单价 P = 本期加权单价四项之和；期初单价 = 期初金额 ÷ 期初数量。阈值：TAIL_MAX（零库存尾差）、TAIL_WARN（挤入出库行的尾差）、PRICE_JUMP_PCT（%）、PRICE_JUMP_AMT（影响金额下限）
@@ -24334,50 +24439,59 @@ UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnNam
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #39
-UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('WW_HIST_OCR', '0000-00', '9999-99', 'P016', 'STR', '历史委外差异转出（JZ05）借方的成本中心，按它归费用池（用户 2026-11-04）') WITH PRIMARY KEY
+-- 费用固定借方红字（用户 2026-11-08）：YF01 / IO01 退回、盘盈时不把费用记到贷方，同旧 0801
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JDT_RED_DEBIT_TRANSCODES', '0000-00', '9999-99', ',YF01,IO01,', 'LIST', '费用固定记借方的凭证代码：费用科目（行上科目）固定借方、存货科目固定贷方，退回 / 盘盈使净额反向时用红字（负数），不换到另一方；同旧 0801（用户 2026-11-08）') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #40
-UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_HIST_OCR', 'PARAM', '凭证与对账', 445, '历史委外转出成本中心', 'STR', NULL, '成本中心代码，如 P016') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JDT_RED_DEBIT_TRANSCODES', 'PARAM', '凭证与对账', 425, '费用固定借方（红字）的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 YF01,IO01；列出的凭证费用科目固定借方、存货科目固定贷方，反向用负数') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #41
-UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_HIST_EXP', 'ACCT', '凭证与对账', 446, '历史委外转出科目', 'STR', NULL, '科目代码，如 510109') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('WW_HIST_OCR', '0000-00', '9999-99', 'P016', 'STR', '历史委外差异转出（JZ05）借方的成本中心，按它归费用池（用户 2026-11-04）') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #42
-UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_WW_HIST', 'C', 'MTC_CA_P_WW_HIST_LOAD 从 MTC_COST_0322_OWOR_ZCP 载入；用户在执行台“历史委外差异”页选择转出账期') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_HIST_OCR', 'PARAM', '凭证与对账', 445, '历史委外转出成本中心', 'STR', NULL, '成本中心代码，如 P016') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #43
-UPSERT "MTC_CA_C_RULE" ("RuleId", "Scene", "Title", "Descr", "Basis") VALUES ('WWH-01', 'S4', '历史委外差异转出', '承接前已关闭、在产品留在 140801 的委外订单，由用户按整张订单选择转出账期。金额进费用池分摊给当月完工产品，P70 生成 JZ05：借 WW_HIST_EXP（510109，成本中心 WW_HIST_OCR），140801 记借方红字。本期不计入 140801 差额，下期起进期初。', '用户 2026-11-04') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_HIST_EXP', 'ACCT', '凭证与对账', 446, '历史委外转出科目', 'STR', NULL, '科目代码，如 510109') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #44
-UPSERT "MTC_CA_C_RULE" ("RuleId", "Scene", "Title", "Descr", "Basis") VALUES ('TAIL-02', 'S12', '发出商品尾差结转', '140601 本期 = 冲销上月计提 + 发货 + 样品转出 + 发票 + 本月计提，应为 0；四舍五入留下的尾差（±GOODS_TAIL_MAX 以内）生成 JZ04：借 / 贷 TAIL_ADJ（640101），贷 / 借 140601，期末差额 = 期初差额；超过的不处理，POST-10 报出', '用户确认') WITH PRIMARY KEY
+UPSERT "MTC_CA_M_TABLE" ("TableName", "Layer", "Source") VALUES ('MTC_CA_WW_HIST', 'C', 'MTC_CA_P_WW_HIST_LOAD 从 MTC_COST_0322_OWOR_ZCP 载入；用户在执行台“历史委外差异”页选择转出账期') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #45
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-11', 'POST', 210, '应付暂估对账', '220202（贷 − 借）按 U_VendorCode = 应付暂估（按供应商，同 C19）。期初 / 本期 / 期末分开列示业务、财务和差额：业务期初取承接 / 上期结果，财务期初 = 本期以前的总账 + 未清凭单；财务本期 = 本期分录 + 底稿中本期尚未过账的凭证（已过账或已在未清凭单的凭证代码不再加）；按参数 RECON_BLOCK_ON 判断（默认 CUR 本期差额，期初差额只列示；用户 2026-10-15；MTC_CA_F_RECON）', 'Y', 'S12') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_RULE" ("RuleId", "Scene", "Title", "Descr", "Basis") VALUES ('WWH-01', 'S4', '历史委外差异转出', '承接前已关闭、在产品留在 140801 的委外订单，由用户按整张订单选择转出账期。金额进费用池分摊给当月完工产品，P70 生成 JZ05：借 WW_HIST_EXP（510109，成本中心 WW_HIST_OCR），140801 记借方红字。本期不计入 140801 差额，下期起进期初。', '用户 2026-11-04') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #46
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-15', 'POST', 215, 'PUR1–PUR5 与业务端逐单据勾稽', 'PUR1–PUR5 把 B1 标准成本自动凭证（收货、退货、发票）在存货、应付暂估、加工费科目上的金额冲掉，按暂估口径（指定单价 U_InitPrice → 已确认价 → LineTotal）重记。逐张单据核对：系统凭证 + PUR 冲回 + PUR 重记（+ MR01）= 业务端（220202 = 暂估变动，存货 = 计入物料成本的金额，140802 = 加工费暂估，140803、价格差异科目、收货单其他科目 = 0）；另报没有系统凭证的单据、已全部开票但暂估没清零的行、PUR4 与订单加工费不一致、本期新用指定单价的行、已过账 PUR 与底稿不一致（MTC_CA_F_PUR_DOC，用户 2026-10-30）。先只警告（参数 POST_WARN_IDS）', 'N', 'S12') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_RULE" ("RuleId", "Scene", "Title", "Descr", "Basis") VALUES ('TAIL-02', 'S12', '发出商品尾差结转', '140601 本期 = 冲销上月计提 + 发货 + 样品转出 + 发票 + 本月计提，应为 0；四舍五入留下的尾差（±GOODS_TAIL_MAX 以内）生成 JZ04：借 / 贷 TAIL_ADJ（640101），贷 / 借 140601，期末差额 = 期初差额；超过的不处理，POST-10 报出', '用户确认') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #47
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-12', 'POST', 220, '销售成本取价', '本期开票 / 未开票交货找不到交货成本、或没有客户类型（取不到 6401 科目）的行', 'Y', 'S10') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-11', 'POST', 210, '应付暂估对账', '220202（贷 − 借）按 U_VendorCode = 应付暂估（按供应商，同 C19）。期初 / 本期 / 期末分开列示业务、财务和差额：业务期初取承接 / 上期结果，财务期初 = 本期以前的总账 + 未清凭单；财务本期 = 本期分录 + 底稿中本期尚未过账的凭证（已过账或已在未清凭单的凭证代码不再加）；按参数 RECON_BLOCK_ON 判断（默认 CUR 本期差额，期初差额只列示；用户 2026-10-15；MTC_CA_F_RECON）', 'Y', 'S12') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #48
-UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-13', 'POST', 225, '生产在产品对账', '500101 的成本凭证 = 生产 / 包装 / 返工订单（WorType ≠ 50）在产品，不含加工费；本期的非成本凭证分录（手工凭证、单据自动凭证等）允许存在，单独列出、不算差异，期初按科目余额全额比较（参数 RECON_COSTONLY_AREAS）。期初 / 本期 / 期末分开列示业务、财务和差额：业务期初取承接 / 上期结果，财务期初 = 本期以前的总账 + 未清凭单；财务本期 = 本期分录 + 底稿中本期尚未过账的凭证（已过账或已在未清凭单的凭证代码不再加）；按参数 RECON_BLOCK_ON 判断（默认 CUR 本期差额，期初差额只列示；用户 2026-10-15；MTC_CA_F_RECON）', 'Y', 'S5') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-15', 'POST', 215, 'PUR1–PUR5 与业务端逐单据勾稽', 'PUR1–PUR5 把 B1 标准成本自动凭证（收货、退货、发票）在存货、应付暂估、加工费科目上的金额冲掉，按暂估口径（指定单价 U_InitPrice → 已确认价 → LineTotal）重记。逐张单据核对：系统凭证 + PUR 冲回 + PUR 重记（+ MR01）= 业务端（220202 = 暂估变动，存货 = 计入物料成本的金额，140802 = 加工费暂估，140803、价格差异科目、收货单其他科目 = 0）；另报没有系统凭证的单据、已全部开票但暂估没清零的行、PUR4 与订单加工费不一致、本期新用指定单价的行、已过账 PUR 与底稿不一致（MTC_CA_F_PUR_DOC，用户 2026-10-30）。先只警告（参数 POST_WARN_IDS）', 'N', 'S12') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #49
-UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('RECON_COSTONLY_AREAS', '0000-00', '9999-99', ',WIP_PROD,GOODS,WW_MAT,', 'LIST', '财务对账中只比较成本凭证（COST_TRANSCODES）的对账项：其他分录（手工凭证、单据自动凭证等）允许存在，单独列出、不算差异；可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP（用户 2026-10-13；GOODS 发出商品手工调整不算差异，用户 2026-10-17）') WITH PRIMARY KEY
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-12', 'POST', 220, '销售成本取价', '本期开票 / 未开票交货找不到交货成本、或没有客户类型（取不到 6401 科目）的行', 'Y', 'S10') WITH PRIMARY KEY
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #50
+UPSERT "MTC_CA_C_CHECK" ("CheckId", "Stage", "SortNo", "Title", "Purpose", "IsBlock", "Scene") VALUES ('POST-13', 'POST', 225, '生产在产品对账', '500101 的成本凭证 = 生产 / 包装 / 返工订单（WorType ≠ 50）在产品，不含加工费；本期的非成本凭证分录（手工凭证、单据自动凭证等）允许存在，单独列出、不算差异，期初按科目余额全额比较（参数 RECON_COSTONLY_AREAS）。期初 / 本期 / 期末分开列示业务、财务和差额：业务期初取承接 / 上期结果，财务期初 = 本期以前的总账 + 未清凭单；财务本期 = 本期分录 + 底稿中本期尚未过账的凭证（已过账或已在未清凭单的凭证代码不再加）；按参数 RECON_BLOCK_ON 判断（默认 CUR 本期差额，期初差额只列示；用户 2026-10-15；MTC_CA_F_RECON）', 'Y', 'S5') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 15_p70_tables.sql #51
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('RECON_COSTONLY_AREAS', '0000-00', '9999-99', ',WIP_PROD,GOODS,WW_MAT,', 'LIST', '财务对账中只比较成本凭证（COST_TRANSCODES）的对账项：其他分录（手工凭证、单据自动凭证等）允许存在，单独列出、不算差异；可选 STOCK、WIP_PROD、WW_MAT、WW_FEE、GOODS、AP（用户 2026-10-13；GOODS 发出商品手工调整不算差异，用户 2026-10-17）') WITH PRIMARY KEY
+
+@@
+-- @stmt 新框架 15_p70_tables.sql #52
 UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('RECON_BLOCK_ON', '0000-00', '9999-99', 'CUR', 'STR', '财务对账（POST-06/09/10/11/13）按哪一列差额判断：CUR 本期差额（期初差额只列示）/ END 期末差额（用户 2026-10-15）') WITH PRIMARY KEY
 
 @@
@@ -24639,7 +24753,9 @@ BEGIN
     DECLARE wwWt NVARCHAR(200); DECLARE smpSt NVARCHAR(500); DECLARE custDom NVARCHAR(50); DECLARE custExp NVARCHAR(50);
     DECLARE maxId BIGINT;
     DECLARE costOnly NVARCHAR(200); DECLARE gTailMax DECIMAL(19,2); DECLARE gRes DECIMAL(19,2); DECLARE gOk INT; DECLARE nJz4 INT;
+    DECLARE redCodes NVARCHAR(200); DECLARE apAcct NVARCHAR(15);
     CALL "MTC_CA_P_RUN_CTX"(:RunId, fc, rt, scen, d0, d1);
+    apAcct := "MTC_CA_F_ACCT"('AP_ACCRUAL', :fc);
     -- 业务口径参数（2026-10-27 从代码中的固定值改为参数）
     wwWt := IFNULL("MTC_CA_F_PARAM"('WW_WORTYPES', :fc), ',50,');
     smpSt := IFNULL("MTC_CA_F_PARAM"('SAMPLE_SALTYPES', :fc), ',样品销售,');
@@ -24659,6 +24775,8 @@ BEGIN
     costCodes := IFNULL("MTC_CA_F_PARAM"('COST_TRANSCODES', :fc), ',');
     costOnly := IFNULL("MTC_CA_F_PARAM"('RECON_COSTONLY_AREAS', :fc), ',WIP_PROD,GOODS,WW_MAT,');
     gTailMax := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('GOODS_TAIL_MAX', :fc), '1'), 19, 2);
+    -- 费用固定记借方的凭证代码（用户 2026-11-08，同旧 0801）：费用科目在借方、存货科目在贷方，退回 / 盘盈多于领用 / 盘亏时用红字（负数），不换方向
+    redCodes := IFNULL("MTC_CA_F_PARAM"('JDT_RED_DEBIT_TRANSCODES', :fc), ',YF01,IO01,');
 
     stockAct =SELECT TO_NVARCHAR("ItmsGrpCod") AS "ItmsGrpCod", MAX("StockAct") AS "Acct"
                  FROM "OGAR" WHERE "PeriodCat" = LEFT(:fc, 4) GROUP BY "ItmsGrpCod";
@@ -24681,8 +24799,9 @@ BEGIN
              LEFT JOIN "MTC_CA_S_ITEM" I ON I."RunId" = L."RunId" AND I."ItemCode" = L."ItemCode"
              LEFT JOIN :stockAct SA ON SA."ItmsGrpCod" = I."ItmsGrpCod"
             WHERE L."RunId" = :RunId AND L."Amount" <> 0;
-    prj = SELECT '59' AS "ObjType", "DocEntry", "LineNum", "Project" FROM "IGN1"
-          UNION ALL SELECT '60', "DocEntry", "LineNum", "Project" FROM "IGE1";
+    -- 项目空串当 NULL：否则同科目、同部门的分录按 NULL / 空串分成两行（用户 2026-11-08）
+    prj = SELECT '59' AS "ObjType", "DocEntry", "LineNum", NULLIF("Project", '') AS "Project" FROM "IGN1"
+          UNION ALL SELECT '60', "DocEntry", "LineNum", NULLIF("Project", '') FROM "IGE1";
     smp = SELECT '15' AS "ObjType", M."DocEntry", T."CustType", M."U_OcrCode" FROM "ODLN" M JOIN :salType T ON T."Name" = M."U_SalOrdType" WHERE LOCATE(:smpSt, ',' || T."BusiType" || ',') > 0
           UNION ALL
           SELECT '16', M."DocEntry", T."CustType", M."U_OcrCode" FROM "ORDN" M JOIN :salType T ON T."Name" = M."U_SalOrdType" WHERE LOCATE(:smpSt, ',' || T."BusiType" || ',') > 0;
@@ -24715,7 +24834,7 @@ BEGIN
           SELECT 'MR02', T1."U_StockCode", NULL, NULL, ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId"
             FROM "@MTC_OMRV" T0 JOIN "@MTC_OMRV1" T1 ON T0."DocEntry" = T1."DocEntry"
            WHERE T0."U_BaseType" = 'MRV1' AND IFNULL(T0."Canceled", 'N') = 'N' AND T0."U_DocDate" BETWEEN :d0 AND :d1
-          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货
+          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货；写 R_JDT 时费用固定借方、存货固定贷方，退回多于领用用红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
           UNION ALL
           SELECT 'YF01', B."AcctCode", B."OcrCode", P."Project", -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
             FROM :base B LEFT JOIN :prj P ON P."ObjType" = B."ObjType" AND P."DocEntry" = B."DocEntry" AND P."LineNum" = B."LineNum"
@@ -24734,7 +24853,7 @@ BEGIN
           -- IO02 形态转换：借 A 存货、贷 B 存货
           UNION ALL
           SELECT 'IO02', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I05', 'O05')
-          -- IO01 盘点：借行上科目、贷存货（盘盈相反）
+          -- IO01 盘点：借行上科目、贷存货；盘盈不换方向，费用借方红字、存货贷方红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
           UNION ALL
           SELECT 'IO01', B."AcctCode", B."OcrCode", NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
           UNION ALL
@@ -24889,7 +25008,7 @@ BEGIN
     INSERT INTO "MTC_CA_R_JDT_SRC" ("FcCode", "RunType", "Scenario", "RunId", "SrcId", "TransCode", "AcctCode", "OcrCode", "Project",
                                     "Amount", "SrcType", "SrcKey")
     SELECT :fc, :rt, :scen, :RunId, :maxId + ROW_NUMBER() OVER (ORDER BY "TransCode", "SrcType", "SrcKey", "AcctCode"),
-           "TransCode", "AcctCode", "OcrCode", "Project", "Amount", "SrcType", "SrcKey"
+           "TransCode", "AcctCode", NULLIF("OcrCode", ''), NULLIF("Project", ''), "Amount", "SrcType", "SrcKey"
       FROM (SELECT * FROM :src
             UNION ALL
             SELECT * FROM :gTail
@@ -24903,14 +25022,23 @@ BEGIN
                                 "AcctCode", "Debit", "Credit", "OcrCode", "Project", "VendorCode")
     SELECT :fc, :rt, :scen, :RunId, S."TransCode",
            -- JZ05 按用户给的分录（用户 2026-11-04）：两行都记借方，140801 在前、红字（负数）
+           -- JDT_RED_DEBIT_TRANSCODES（YF01 / IO01，用户 2026-11-08）：费用科目固定借方在前，存货科目固定贷方，负数红字
+           -- PUR1 / PUR4 同旧 6101_1（用户 2026-11-08）：存货 / 140802 固定借方、220202 固定贷方，退货多于收货时记负数（红字）
            ROW_NUMBER() OVER (PARTITION BY S."TransCode" ORDER BY CASE WHEN S."TransCode" = 'JZ05' THEN CASE WHEN S."Amt" < 0 THEN 0 ELSE 1 END
+                                                                   WHEN S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN 1
                                                                    WHEN S."Amt" > 0 THEN 0 ELSE 1 END, S."AcctCode", S."OcrCode", S."Project", S."VendorCode"),
            C."TrnsCodDsc", :d1, S."AcctCode",
-           CASE WHEN S."TransCode" = 'JZ05' OR S."Amt" > 0 THEN S."Amt" ELSE 0 END,
-           CASE WHEN S."TransCode" <> 'JZ05' AND S."Amt" < 0 THEN -S."Amt" ELSE 0 END, S."OcrCode", S."Project", S."VendorCode"
-      FROM (SELECT "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
-              FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId
-             GROUP BY "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode") S
+           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN S."Amt" WHEN S."Side" = 'C' THEN 0 WHEN S."Amt" > 0 THEN S."Amt" ELSE 0 END,
+           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN -S."Amt" WHEN S."Amt" < 0 THEN -S."Amt" ELSE 0 END,
+           S."OcrCode", S."Project", S."VendorCode"
+      FROM (SELECT G.*, CASE WHEN G."TransCode" IN ('PUR1', 'PUR4') THEN CASE WHEN G."AcctCode" = :apAcct THEN 'C' ELSE 'D' END
+                             WHEN LOCATE(:redCodes, ',' || G."TransCode" || ',') = 0 THEN NULL
+                             WHEN G."AcctCode" IN (SELECT "Acct" FROM :stockAct) THEN 'C' ELSE 'D' END AS "Side"
+              FROM (SELECT "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
+                      FROM (SELECT "TransCode", "AcctCode", NULLIF("OcrCode", '') AS "OcrCode", NULLIF("Project", '') AS "Project",
+                                   NULLIF("VendorCode", '') AS "VendorCode", "Amount"
+                              FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId)
+                     GROUP BY "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode") G) S
       LEFT JOIN "OTRC" C ON C."TrnsCode" = S."TransCode"
      WHERE S."Amt" <> 0;
     RowCnt := ::ROWCOUNT;
@@ -28382,6 +28510,46 @@ UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnNam
 @@
 -- @stmt 成本报表 21_reports.sql #3
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
+-- 单据类型的中文名（用户 2026-11-11：报表上显示中文）：B1 对象类型 + 订单（202 / MTC_OWOR）+ 自定义单据，名称同视图 MTC_DocType（订单两项同 MTC_CA_F_RPT_OTNAME）；认不出的原样返回代码
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_DTNAME" (IN ObjType NVARCHAR(20))
+RETURNS N NVARCHAR(30)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :ObjType
+           WHEN '13' THEN '应收发票' WHEN '14' THEN '应收贷项' WHEN '15' THEN '销售交货' WHEN '16' THEN '销售退货' WHEN '17' THEN '销售订单'
+           WHEN '18' THEN '应付发票' WHEN '19' THEN '应付贷项' WHEN '20' THEN '采购收货' WHEN '21' THEN '采购退货' WHEN '22' THEN '采购订单'
+           WHEN '23' THEN '销售报价单' WHEN '24' THEN '收款单' WHEN '29' THEN '日记帐凭证' WHEN '30' THEN '日记帐分录' WHEN '46' THEN '付款单'
+           WHEN '59' THEN '其他收货' WHEN '60' THEN '其他发货' WHEN '67' THEN '库存转储' WHEN '162' THEN '库存重估' WHEN '10000071' THEN '盘点过帐'
+           WHEN '202' THEN '生产订单' WHEN 'MTC_OWOR' THEN '返工单' WHEN 'MTC_OMRV' THEN '库存重估单'
+           WHEN 'MTC_CSOIGE' THEN '领料申请' WHEN 'MTC_FHTZ' THEN '发货通知单' WHEN 'MTC_JCTZ' THEN '采购到货单'
+           ELSE :ObjType END;
+END
+
+@@
+-- @stmt 成本报表 21_reports.sql #4
+-- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
+-- 订单单据、订单类型的中文名（用户 2026-11-11：报表上显示中文，名称同旧 CO4011 / CO4013）；认不出的原样返回代码，空返回空
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_OTNAME" (IN OrderType NVARCHAR(20))
+RETURNS N NVARCHAR(20)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :OrderType WHEN '202' THEN '生产订单' WHEN 'MTC_OWOR' THEN '返工单' ELSE :OrderType END;
+END
+
+@@
+-- @stmt 成本报表 21_reports.sql #5
+-- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_WTNAME" (IN WorType NVARCHAR(10))
+RETURNS N NVARCHAR(20)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :WorType WHEN '10' THEN '生产计划单' WHEN '20' THEN '包装计划单' WHEN '30' THEN '返工计划单' WHEN '40' THEN '生产试打'
+                       WHEN '50' THEN '委外工单' ELSE :WorType END;
+END
+
+@@
+-- @stmt 成本报表 21_reports.sql #6
+-- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- 逗号列表拆成行（空串 → 0 行）；最多 200 个值。V = 值，P = 开头匹配用的 LIKE 模式；值以 = 开头时精确匹配（如 =A1 不会匹配 A10，执行台钻取明细时用）
 CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_LIST" (IN Str NVARCHAR(5000))
 RETURNS TABLE ("V" NVARCHAR(200), "P" NVARCHAR(201))
@@ -28396,7 +28564,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #4
+-- @stmt 成本报表 21_reports.sql #7
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- 账期 → 取数运行（所有报表共用“取哪次运行”的规则）：一行 = 区间内一个账期（OFPR），没有可用运行的 RunId 为空
 -- 承接账期 BOOTSTRAP_FC 及以前 → 最近一次成功的历史运行（RunType H，旧框架回填，22_legacy_load.sql；用户 2026-11-02 报表合并：
@@ -28450,7 +28618,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #5
+-- @stmt 成本报表 21_reports.sql #8
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- 区间内只有历史运行（旧框架回填）、没有新框架运行时为 Y：第一阶段不支持历史期的报表（R08 / R11 / R14 / R17 / R18）
 -- 这时只返回一行提示（2026-11-02）；区间跨新旧时照常计算，历史期那几个月没有数据
@@ -28466,7 +28634,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #6
+-- @stmt 成本报表 21_reports.sql #9
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R00 成本报表运行状态：各账期报表取的是哪次运行、什么时候算的、凭单批号。
@@ -28492,7 +28660,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #7
+-- @stmt 成本报表 21_reports.sql #10
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R03 存货收发存汇总：每个物料（或物料组、存货科目）期初、本期入库、出库、期末的数量和四项金额。
@@ -28633,7 +28801,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #8
+-- @stmt 成本报表 21_reports.sql #11
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R04 存货明细账：逐条库存变动，带结存数量和金额。
@@ -28682,8 +28850,8 @@ BEGIN
                  IFNULL(B."Q", 0) + SUM(M."Qty") OVER (PARTITION BY M."ItemCode" ORDER BY M."FcCode", M."DocDate", M."LineId" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "BalQ",
                  IFNULL(B."A", 0) + SUM(M."Amount") OVER (PARTITION BY M."ItemCode" ORDER BY M."FcCode", M."DocDate", M."LineId" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "BalA"
             FROM :mv M LEFT JOIN :beg B ON B."ItemCode" = M."ItemCode";
-    SELECT X."账期", X."物料", M."ItemName" AS "名称", X."日期", X."单据类型", X."单号 Num", X."行号", X."交易类型", T."Name" AS "交易类型名称",
-           X."业务类型", X."仓库", X."订单号 Num", X."订单类型",
+    SELECT X."账期", X."物料", M."ItemName" AS "名称", X."日期", "MTC_CA_F_RPT_DTNAME"(X."单据类型") AS "单据类型", X."单号 Num", X."行号", X."交易类型", T."Name" AS "交易类型名称",
+           X."业务类型", X."仓库", X."订单号 Num", "MTC_CA_F_RPT_WTNAME"(X."订单类型") AS "订单类型",
            X."入库·数量", CAST(X."入库·金额" / NULLIF(X."入库·数量", 0) AS DECIMAL(19,6)) AS "入库·单价", X."入库·金额",
            X."出库·数量", CAST(X."出库·金额" / NULLIF(X."出库·数量", 0) AS DECIMAL(19,6)) AS "出库·单价", X."出库·金额",
            X."结存·数量", CAST(X."结存·金额" / NULLIF(X."结存·数量", 0) AS DECIMAL(19,6)) AS "结存·单价", X."结存·金额",
@@ -28719,7 +28887,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #9
+-- @stmt 成本报表 21_reports.sql #12
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R01 产品成本计算单：每张订单期初在产品 + 本期投入 + 本级分摊 = 完工转出 + 关单差异 + 期末在产品（四项）。
@@ -28751,7 +28919,7 @@ BEGIN
              AND (:nGrp = 0 OR EXISTS (SELECT 1 FROM :lGrp X WHERE TO_NVARCHAR(M."ItmsGrpCod") = X."V"))
              AND (IFNULL(:Scope, '') = '' OR (:Scope = '1' AND O."RecvQty" <> 0) OR (:Scope = '2' AND O."ClosedInFc" = 'Y') OR (:Scope = '3' AND O."WipAmt" <> 0));
     IF :STYPE = '1' THEN
-        SELECT O."FcCode" AS "账期", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", O."WorType" AS "订单类型",
+        SELECT O."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(O."WorType") AS "订单类型",
                O."ItemCode" AS "产品", O."ItemName" AS "产品名称",
                M."ItemCode" AS "材料",
                CASE WHEN M."ItemCode" = '#SUBFEE' THEN '委外加工费' ELSE I."ItemName" END AS "材料名称",
@@ -28780,7 +28948,7 @@ BEGIN
                      SUM("WipMat") AS "WMat", SUM("WipLab") AS "WLab", SUM("WipMfg") AS "WMfg", SUM("WipSub") AS "WSub"
                 FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" IN (SELECT "RunId" FROM :runs)
                GROUP BY "RunId", "OrderType", "OrderEntry";
-        SELECT O."FcCode" AS "账期", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", O."WorType" AS "订单类型",
+        SELECT O."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(O."WorType") AS "订单类型",
                O."ItemCode" AS "产品", O."ItemName" AS "产品名称", O."Grp" AS "物料组", O."iLevel" AS "层级", O."CardCode" AS "委外供应商",
                O."StatusAtEnd" AS "期末状态", O."ClosedInFc" AS "按关单处理",
                CAST(O."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(O."PrevRecvQty" AS DECIMAL(19,6)) AS "上期累计完工", CAST(O."RecvQty" AS DECIMAL(19,6)) AS "本期完工",
@@ -28807,16 +28975,20 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #10
+-- @stmt 成本报表 21_reports.sql #13
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R02 完工产品成本汇总：每个产品本期完工数量、四项成本、单位成本和构成。
 -- 参数：FcFrom, FcTo, Item 产品, ItemGrp 物料组, Lvl 层级, WorType 订单类型, STYPE 0 按产品 / 1 产品 × 订单
--- 口径：MTC_CA_R_ORDER 本期完工成本（Cost*，含本级分摊），只列本期有完工或有完工成本的订单；多个账期累加。
+-- 口径：MTC_CA_R_ORDER 本期完工成本（Cost*，含本级分摊），只列本期有完工或有完工成本的订单；多个账期时按产品显示也按账期分行（第一列账期，用户 2026-11-11）。
 --       成本是还原后的：完工成本·制造 = 本级分摊·制造（本期费用池分到这张订单，随完工全部转出）+ 领料带入·制造（结转的材料和半成品里含的制造，含期初在产品），
 --       人工同理。多层产品同一笔费用在半成品和成品上各算一次，所以完工成本·制造的合计大于当期分摊（用户 2026-11-06）。
 --       完工成本·委外 = 本级分摊·委外（这张订单自己的加工费 '#SUBFEE' 本期结转，直接计入订单，不走费用池）+ 领料带入·委外（半成品里含的加工费）；
 --       加工费结转按有入库时全部转出，可能含以前账期留在订单上的，所以不一定等于本期发生的加工费，委外工单上的合计 = R07 完工转出·加工费。
+--       本级分摊·材料 = 完工成本·合计 − 本级分摊·制造 − 人工 − 委外，即领用的材料和半成品全额（半成品里含的料工费都算材料），同 R22 本级口径；
+--       本级分摊四项合计 = 完工成本·合计（用户 2026-11-11）。
+--       入库单价 = 完工入库行（R_LINE Cat = RCPT）的金额合计 ÷ 数量合计，用来核对单位成本·合计：入库行按订单成本 × 行数量 ÷ 本期入库数分摊、
+--       尾差挤数量最大的行，正常两者只差分位；差得多说明入库行和订单成本没对上（用户 2026-11-11）。
 -- 勾稽：总成本 = R01 完工转出合计 = R03 生产入库（V01）；不加条件时本级分摊·制造 / 人工合计 = R06 已分配（V04）。
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE "MTC_CA_RPT_02_PRODCOST" (
@@ -28833,11 +29005,16 @@ BEGIN
     ord = SELECT U."FcCode", O."RunId", O."OrderType", O."OrderEntry", S."OrderNum", O."WorType", O."ItemCode", M."ItemName",
                  TO_NVARCHAR(M."ItmsGrpCod") AS "Grp", G."ItmsGrpNam" AS "GrpName", O."iLevel",
                  O."RecvQty", O."CostMat", O."CostLab", O."CostMfg", O."CostSub", O."CostAmt", O."AllocLab", O."AllocMfg",
-                 IFNULL(F."CarSub", 0) AS "OwnSub"
+                 IFNULL(F."CarSub", 0) AS "OwnSub", IFNULL(RC."Qty", 0) AS "RcptQty", IFNULL(RC."Amt", 0) AS "RcptAmt"
             FROM :runs U
             JOIN "MTC_CA_R_ORDER" O ON O."RunId" = U."RunId"
             LEFT JOIN "MTC_CA_S_ORDER" S ON S."RunId" = O."RunId" AND S."OrderType" = O."OrderType" AND S."OrderEntry" = O."OrderEntry"
             LEFT JOIN "MTC_CA_R_ORDER_MAT" F ON F."RunId" = O."RunId" AND F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" AND F."ItemCode" = '#SUBFEE'
+            LEFT JOIN (SELECT L."RunId", L."OrderType", L."OrderEntry", SUM(L."Qty") AS "Qty", SUM(L."Amount") AS "Amt"
+                         FROM "MTC_CA_R_LINE" L
+                        WHERE L."Cat" = 'RCPT' AND L."RunId" IN (SELECT "RunId" FROM :runs)
+                        GROUP BY L."RunId", L."OrderType", L."OrderEntry") RC
+                   ON RC."RunId" = O."RunId" AND RC."OrderType" = O."OrderType" AND RC."OrderEntry" = O."OrderEntry"
             LEFT JOIN "OITM" M ON M."ItemCode" = O."ItemCode"
             LEFT JOIN "OITB" G ON G."ItmsGrpCod" = M."ItmsGrpCod"
            WHERE (O."RecvQty" <> 0 OR O."CostAmt" <> 0)
@@ -28846,39 +29023,44 @@ BEGIN
              AND (:nLvl = 0 OR EXISTS (SELECT 1 FROM :lLvl X WHERE TO_NVARCHAR(O."iLevel") = X."V"))
              AND (:nWt = 0 OR EXISTS (SELECT 1 FROM :lWt X WHERE O."WorType" = X."V"));
     IF :STYPE = '1' THEN
-        SELECT "ItemCode" AS "产品", "ItemName" AS "名称", "FcCode" AS "账期", "OrderType" AS "订单单据", "OrderNum" AS "订单号 Num",
-               "OrderEntry" AS "订单 Entry", "WorType" AS "订单类型",
+        SELECT "ItemCode" AS "产品", "ItemName" AS "名称", "FcCode" AS "账期",
+               "MTC_CA_F_RPT_OTNAME"("OrderType") AS "订单单据", "OrderNum" AS "订单号 Num",
+               "OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"("WorType") AS "订单类型",
                CAST("RecvQty" AS DECIMAL(19,6)) AS "完工数量",
                CAST("CostMat" AS DECIMAL(19,2)) AS "完工成本·材料", CAST("CostLab" AS DECIMAL(19,2)) AS "完工成本·人工",
                CAST("CostMfg" AS DECIMAL(19,2)) AS "完工成本·制造", CAST("CostSub" AS DECIMAL(19,2)) AS "完工成本·委外",
                CAST("CostAmt" AS DECIMAL(19,2)) AS "完工成本·合计",
+               CAST("CostAmt" - "AllocMfg" - "AllocLab" - "OwnSub" AS DECIMAL(19,2)) AS "本级分摊·材料",
                CAST("AllocMfg" AS DECIMAL(19,2)) AS "本级分摊·制造", CAST("AllocLab" AS DECIMAL(19,2)) AS "本级分摊·人工", CAST("OwnSub" AS DECIMAL(19,2)) AS "本级分摊·委外",
                CAST("CostMfg" - "AllocMfg" AS DECIMAL(19,2)) AS "领料带入·制造", CAST("CostLab" - "AllocLab" AS DECIMAL(19,2)) AS "领料带入·人工", CAST("CostSub" - "OwnSub" AS DECIMAL(19,2)) AS "领料带入·委外",
                CAST("CostAmt" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·合计",
+               CAST("RcptAmt" / NULLIF("RcptQty", 0) AS DECIMAL(19,6)) AS "入库单价",
                CAST("CostMat" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·材料", CAST("CostLab" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·人工",
                CAST("CostMfg" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·制造", CAST("CostSub" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·委外"
           FROM :ord ORDER BY "ItemCode", "FcCode", "OrderType", "OrderEntry";
     ELSE
-        SELECT "Grp" AS "物料组", MAX("GrpName") AS "物料组名称", "ItemCode" AS "产品", MAX("ItemName") AS "名称", MAX("iLevel") AS "层级",
+        SELECT "FcCode" AS "账期", "Grp" AS "物料组", MAX("GrpName") AS "物料组名称", "ItemCode" AS "产品", MAX("ItemName") AS "名称", MAX("iLevel") AS "层级",
                COUNT(*) AS "订单数", CAST(SUM("RecvQty") AS DECIMAL(19,6)) AS "完工数量",
                CAST(SUM("CostMat") AS DECIMAL(19,2)) AS "完工成本·材料", CAST(SUM("CostLab") AS DECIMAL(19,2)) AS "完工成本·人工",
                CAST(SUM("CostMfg") AS DECIMAL(19,2)) AS "完工成本·制造", CAST(SUM("CostSub") AS DECIMAL(19,2)) AS "完工成本·委外",
                CAST(SUM("CostAmt") AS DECIMAL(19,2)) AS "完工成本·合计",
+               CAST(SUM("CostAmt" - "AllocMfg" - "AllocLab" - "OwnSub") AS DECIMAL(19,2)) AS "本级分摊·材料",
                CAST(SUM("AllocMfg") AS DECIMAL(19,2)) AS "本级分摊·制造", CAST(SUM("AllocLab") AS DECIMAL(19,2)) AS "本级分摊·人工", CAST(SUM("OwnSub") AS DECIMAL(19,2)) AS "本级分摊·委外",
                CAST(SUM("CostMfg" - "AllocMfg") AS DECIMAL(19,2)) AS "领料带入·制造", CAST(SUM("CostLab" - "AllocLab") AS DECIMAL(19,2)) AS "领料带入·人工", CAST(SUM("CostSub" - "OwnSub") AS DECIMAL(19,2)) AS "领料带入·委外",
                CAST(SUM("CostAmt") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·合计",
+               CAST(SUM("RcptAmt") / NULLIF(SUM("RcptQty"), 0) AS DECIMAL(19,6)) AS "入库单价",
                CAST(SUM("CostMat") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·材料", CAST(SUM("CostLab") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·人工",
                CAST(SUM("CostMfg") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·制造", CAST(SUM("CostSub") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·委外",
                CAST(SUM("CostMat") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·材料", CAST(SUM("CostLab") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·人工",
                CAST(SUM("CostMfg") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·制造", CAST(SUM("CostSub") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·委外"
           FROM :ord
-         GROUP BY "Grp", "ItemCode"
-         ORDER BY LPAD(IFNULL("Grp", ''), 10, '0'), "ItemCode";
+         GROUP BY "FcCode", "Grp", "ItemCode"
+         ORDER BY "FcCode", LPAD(IFNULL("Grp", ''), 10, '0'), "ItemCode";
     END IF;
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #11
+-- @stmt 成本报表 21_reports.sql #14
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R05 材料耗用汇总：材料本期领用到哪里去了（生产 / 委外 / 返工 / 试打 / 其他出入库 / 销售 / 盘点 / 形态转换）。
@@ -28939,7 +29121,7 @@ BEGIN
          GROUP BY L."Prod", L."ItemCode" ORDER BY L."Prod", L."ItemCode";
     ELSEIF :STYPE = '1' THEN
         SELECT L."ItemCode" AS "材料", MAX(M."ItemName") AS "材料名称", L."Dest" AS "去向", L."FcCode" AS "账期",
-               L."OrderType" AS "订单单据", L."OrderNum" AS "订单号 Num", L."WorType" AS "订单类型", L."Prod" AS "产品", MAX(P."ItemName") AS "产品名称",
+               MAX("MTC_CA_F_RPT_OTNAME"(L."OrderType")) AS "订单单据", L."OrderNum" AS "订单号 Num", MAX("MTC_CA_F_RPT_WTNAME"(L."WorType")) AS "订单类型", L."Prod" AS "产品", MAX(P."ItemName") AS "产品名称",
                CASE WHEN L."OrderEntry" IS NULL THEN L."AcctCode" END AS "科目", MAX(A."AcctName") AS "科目名称",
                CAST(-SUM(L."Qty") AS DECIMAL(19,6)) AS "耗用·数量", CAST(-SUM(L."Amount") / NULLIF(-SUM(L."Qty"), 0) AS DECIMAL(19,6)) AS "耗用·单价",
                CAST(-SUM(L."Amount") AS DECIMAL(19,2)) AS "耗用·金额"
@@ -28962,7 +29144,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #12
+-- @stmt 成本报表 21_reports.sql #15
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice,@MTC_CSIGE1,@MTC_CSOIGE,@MTC_CSIGN1,@MTC_CSOIGN,OIGE.U_Creator,OIGN.U_Creator
 -- ---------------------------------------------------------------------
 -- R24 其他领用明细表（用户 2026-11-06，替代旧的其他领用查询）：与生产订单无关的其他出入库和盘点，逐单据行列出成本、部门、科目、研发项目和领用申请信息。
@@ -29070,7 +29252,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #13
+-- @stmt 成本报表 21_reports.sql #16
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R06 制造费用 / 人工分配表：费用池归集了多少、按工时分给了哪些产品和订单、没分到的原因。
@@ -29124,7 +29306,7 @@ BEGIN
          ORDER BY D."FcCode", CASE WHEN D."PoolCode" IS NULL THEN 1 ELSE 0 END, D."PoolCode", D."ItemCode";
     ELSEIF :STYPE = '2' THEN
         SELECT U."FcCode" AS "账期", A."PoolCode" AS "费用池", C."PoolName" AS "费用池名称", CASE A."Elem" WHEN 'MFG' THEN '制造' ELSE '人工' END AS "要素",
-               A."OrderType" AS "订单单据", S."OrderNum" AS "订单号 Num", A."OrderEntry" AS "订单 Entry", S."WorType" AS "订单类型",
+               "MTC_CA_F_RPT_OTNAME"(A."OrderType") AS "订单单据", S."OrderNum" AS "订单号 Num", A."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(S."WorType") AS "订单类型",
                S."ItemCode" AS "产品", M."ItemName" AS "产品名称",
                CAST(A."Hours" AS DECIMAL(19,6)) AS "单位工时", CAST(A."RecvQty" AS DECIMAL(19,6)) AS "本期入库数", CAST(A."Weight" AS DECIMAL(19,6)) AS "工时",
                CAST(A."Ratio" * 100 AS DECIMAL(19,4)) AS "占池比例 %", CAST(A."Amount" AS DECIMAL(19,2)) AS "分摊金额"
@@ -29165,7 +29347,7 @@ BEGIN
         SELECT S."FcCode" AS "账期", S."PoolCode" AS "费用池", C."PoolName" AS "费用池名称", CASE S."Elem" WHEN 'MFG' THEN '制造' ELSE '人工' END AS "要素",
                CASE S."Src" WHEN 'JDT' THEN '凭证' WHEN 'MRV' THEN '库存重估' WHEN 'PROWW' THEN '委外重估' WHEN 'SHARED' THEN '公摊材料' WHEN 'CLOSEDIF' THEN '关单差异' WHEN 'WWHIST' THEN '历史委外差异' ELSE S."Src" END AS "来源",
                S."SrcTrans" AS "凭证代码 / 交易类型", S."AcctCode" AS "科目", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."DocDate" AS "日期",
-               S."SrcObj" AS "单据类型", S."DocNum" AS "单号 Num", S."JdtNum" AS "凭证编号 Number", S."SrcKey" AS "来源键",
+               "MTC_CA_F_RPT_DTNAME"(S."SrcObj") AS "单据类型", S."DocNum" AS "单号 Num", S."JdtNum" AS "凭证编号 Number", S."SrcKey" AS "来源键",
                S."ItemCode" AS "物料", CAST(S."Qty" AS DECIMAL(19,6)) AS "数量", CAST(S."Amount" AS DECIMAL(19,2)) AS "金额", S."Note" AS "备注"
           FROM :src S
           LEFT JOIN "MTC_CA_C_POOL" C ON C."PoolCode" = S."PoolCode"
@@ -29199,7 +29381,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #14
+-- @stmt 成本报表 21_reports.sql #17
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R07 委外加工成本表：委外订单发出材料、加工费、完工成本、在产品，按供应商汇总。
@@ -29227,7 +29409,7 @@ BEGIN
              AND (:nOrd = 0 OR EXISTS (SELECT 1 FROM :lOrd X WHERE S."OrderNum" LIKE X."P"))
              AND (:nProd = 0 OR EXISTS (SELECT 1 FROM :lProd X WHERE O."ItemCode" LIKE X."P"));
     IF :STYPE = '2' THEN
-        SELECT O."FcCode" AS "账期", O."CardCode" AS "供应商", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."ItemCode" AS "产品",
+        SELECT O."FcCode" AS "账期", O."CardCode" AS "供应商", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."ItemCode" AS "产品",
                M."ItemCode" AS "材料", CASE WHEN M."ItemCode" = '#SUBFEE' THEN '委外加工费' ELSE I."ItemName" END AS "材料名称",
                CAST(M."OpenIssMat" + M."OpenIssLab" + M."OpenIssMfg" + M."OpenIssSub" - M."OpenCarMat" - M."OpenCarLab" - M."OpenCarMfg" - M."OpenCarSub" AS DECIMAL(19,2)) AS "期初在产品",
                CAST(M."IssQty" AS DECIMAL(19,6)) AS "本期发出·数量", CAST(M."IssMat" + M."IssLab" + M."IssMfg" + M."IssSub" AS DECIMAL(19,2)) AS "本期发出·金额",
@@ -29255,7 +29437,7 @@ BEGIN
              GROUP BY O."FcCode", O."CardCode", O."OrderType", O."OrderEntry", O."OrderNum", O."ItemCode", O."StatusAtEnd", O."ClosedInFc",
                       O."PlannedQty", O."RecvQty", O."CostAmt", O."CloseDifAmt";
         IF :STYPE = '1' THEN
-            SELECT D."FcCode" AS "账期", D."CardCode" AS "供应商", C."CardName" AS "供应商名称", D."OrderType" AS "订单单据", D."OrderNum" AS "订单号 Num",
+            SELECT D."FcCode" AS "账期", D."CardCode" AS "供应商", C."CardName" AS "供应商名称", "MTC_CA_F_RPT_OTNAME"(D."OrderType") AS "订单单据", D."OrderNum" AS "订单号 Num",
                    D."OrderEntry" AS "订单 Entry", D."ItemCode" AS "产品", M."ItemName" AS "产品名称", D."StatusAtEnd" AS "期末状态", D."ClosedInFc" AS "按关单处理",
                    CAST(D."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(D."RecvQty" AS DECIMAL(19,6)) AS "本期完工",
                    CAST(D."BMat" AS DECIMAL(19,2)) AS "期初在产品·材料", CAST(D."BFee" AS DECIMAL(19,2)) AS "期初在产品·加工费",
@@ -29283,7 +29465,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #15
+-- @stmt 成本报表 21_reports.sql #18
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R08 销售成本计算表：期初发出商品 + 本期发货 − 独立退货 − 本期消耗（开票、贷项、退货、尾差）= 期末发出商品；销售成本 = DN03。
@@ -29361,7 +29543,7 @@ BEGIN
           FROM (SELECT B.*, CASE :STYPE WHEN '1' THEN B."CardCode" WHEN '2' THEN B."ObjType" || '-' || TO_NVARCHAR(B."DocEntry") || '-' || TO_NVARCHAR(B."LineNum") ELSE B."ItemCode" END AS "K"
                   FROM :b2 B)
          GROUP BY "K";
-    SELECT "K" AS "代码", "N" AS "名称", "ObjType" AS "单据类型", "DocNum" AS "单号 Num", "LineNum" AS "行号", "DocDate" AS "单据日期",
+    SELECT "K" AS "代码", "N" AS "名称", "MTC_CA_F_RPT_DTNAME"("ObjType") AS "单据类型", "DocNum" AS "单号 Num", "LineNum" AS "行号", "DocDate" AS "单据日期",
            "CardCode" AS "客户", "CustType" AS "客户类型", "ItemCode" AS "物料",
            CAST("Beg" AS DECIMAL(19,2)) AS "期初发出商品", CAST("Iss" AS DECIMAL(19,2)) AS "本期·发货", CAST("Ret0" AS DECIMAL(19,2)) AS "本期·独立退货",
            CAST("Inv" AS DECIMAL(19,2)) AS "本期消耗·开票", CAST("Rin" AS DECIMAL(19,2)) AS "本期消耗·贷项", CAST("Ret" AS DECIMAL(19,2)) AS "本期消耗·基于交货退货",
@@ -29373,7 +29555,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #16
+-- @stmt 成本报表 21_reports.sql #19
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R09 存货与生产成本对账：业务端（新框架结果）与总账按对账项、科目逐项比较，期初 / 本期 / 期末分开列示。
@@ -29408,7 +29590,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #17
+-- @stmt 成本报表 21_reports.sql #20
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R10 成本凭证清单及来源：本期成本模块生成的凭证（每种凭证代码一张）、分录、每笔分录的业务来源。
@@ -29416,6 +29598,10 @@ END
 -- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细金额正 = 借、负 = 贷。
 -- 勾稽：来源明细合计 = 分录合计（V06）。
 -- 列名：凭证代码、科目编码这两列输出英文字段名 TransCode、AcctCode（用户 2026-11-07，这张报表特殊），执行台按 rpt_defs.json 的 alias 显示中文。
+-- 运行号 = 这张报表取数的成本运行（MTC_CA_RUN.RunId，规则同 R00），三种显示方式都有；分录号 = R_JDT.LineNo（凭证代码内的行号），分录、来源明细都有，
+--   来源明细按分录号排，同一分录号的来源合计 = 该分录金额（用户 2026-11-11）。
+-- 交易号 TransId / 凭证编号 Number / B1 行号 Line_ID：凭单过账后 B1 日记账分录的编号（按 MTC_CA_JV 批号找 OJDT，行按分录号 − 1 并核对科目、金额），待过账时为空（用户 2026-11-11）。
+-- 财务凭证号 U_CWNum：同一张 OJDT 的自定义字段 OJDT.U_CWNum，跟交易号同时显示，待过账为空（用户 2026-11-11）。
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE "MTC_CA_RPT_10_JV" (IN Fc NVARCHAR(10), IN TransCode NVARCHAR(500), IN Acct NVARCHAR(500), IN STYPE NVARCHAR(1))
 LANGUAGE SQLSCRIPT READS SQL DATA AS
@@ -29428,15 +29614,31 @@ BEGIN
         SELECT '这个账期没有成功的正式计算（看 R00）' AS "说明" FROM DUMMY;
         RETURN;
     END IF;
+    -- B1 交易号（用户 2026-11-11）：MTC_CA_JV 最新已生成的凭单批号 → 过账后的 OJDT（同 BatchNum、TransCode；不含 B1 自动冲销的 StornoToTr 凭证）；
+    --   待过账、已在 B1 删除的没有。行：执行台按分录号顺序写凭单，Line_ID = 分录号 − 1，再核对科目（FormatCode 换 AcctCode，同 dev_server SQL_JV_LINES）
+    --   和借 − 贷金额，对不上的留空
+    jv = SELECT G."TransCode", G."BatchNum", MAX(H."TransId") AS "TransId", MAX(H."Number") AS "Number", MAX(H."U_CWNum") AS "U_CWNum"
+           FROM (SELECT "TransCode", MAX("BatchNum") AS "BatchNum" FROM "MTC_CA_JV"
+                  WHERE "FcCode" = :fc AND "RunId" = :rid AND "Status" = 'CREATED' AND "BatchNum" IS NOT NULL GROUP BY "TransCode") G
+           LEFT JOIN "OJDT" H ON H."BatchNum" = G."BatchNum" AND H."TransCode" = G."TransCode" AND H."StornoToTr" IS NULL
+          GROUP BY G."TransCode", G."BatchNum";
+    jl = SELECT J."TransCode", J."LineNo", L."TransId", L."Line_ID", V."U_CWNum"
+           FROM :jv V
+           JOIN "MTC_CA_R_JDT" J ON J."RunId" = :rid AND J."TransCode" = V."TransCode"
+           LEFT JOIN "OACT" A1 ON A1."AcctCode" = J."AcctCode"
+           LEFT JOIN (SELECT "FormatCode", MAX("AcctCode") AS "AcctCode" FROM "OACT" WHERE IFNULL("FormatCode", '') <> '' GROUP BY "FormatCode") A2
+             ON A1."AcctCode" IS NULL AND A2."FormatCode" = J."AcctCode"
+           JOIN "JDT1" L ON L."TransId" = V."TransId" AND L."Line_ID" = J."LineNo" - 1
+                        AND L."Account" = IFNULL(A1."AcctCode", A2."AcctCode") AND L."Debit" - L."Credit" = J."Debit" - J."Credit";
     IF :STYPE = '2' THEN
-        SELECT S."TransCode" AS "TransCode", S."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."VendorCode" AS "供应商",
+        SELECT :fc AS "FcCode", :rid AS "运行号", S."TransCode" AS "TransCode", J."LineNo" AS "分录号", X."TransId" AS "交易号 TransId", X."U_CWNum" AS "财务凭证号 U_CWNum", X."Line_ID" AS "B1 行号 Line_ID", S."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."VendorCode" AS "供应商",
                CASE S."SrcType" WHEN 'LINE' THEN '单据行' WHEN 'ORDER' THEN '订单' WHEN 'DOC' THEN 'B1 单据行' WHEN 'GL' THEN '总账分录' WHEN 'OMRV' THEN '重估单'
                                 WHEN 'ITEM' THEN '物料尾差' ELSE S."SrcType" END AS "来源类型",
                S."SrcKey" AS "来源键",
                CAST(CASE WHEN S."Amount" > 0 THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
                CAST(CASE WHEN S."Amount" < 0 THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
                COALESCE(D."DocDate", CAST(NULL AS DATE)) AS "单据日期",
-               COALESCE(D."ObjType", O."OrderType") AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
+               "MTC_CA_F_RPT_DTNAME"(COALESCE(D."ObjType", O."OrderType")) AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
                COALESCE(L."ItemCode", O."ItemCode") AS "物料", L."TransCode" AS "交易类型", CAST(L."Qty" AS DECIMAL(19,6)) AS "数量",
                LO."OrderNum" AS "订单号 Num", S."Note" AS "备注"
           FROM "MTC_CA_R_JDT_SRC" S
@@ -29446,22 +29648,29 @@ BEGIN
           LEFT JOIN "MTC_CA_S_ORDER" LO ON LO."RunId" = L."RunId" AND LO."OrderType" = L."OrderType" AND LO."OrderEntry" = L."OrderEntry"
           LEFT JOIN "MTC_CA_S_ORDER" O ON S."SrcType" = 'ORDER' AND O."RunId" = S."RunId" AND O."OrderType" || '-' || TO_NVARCHAR(O."OrderEntry") = S."SrcKey"
           LEFT JOIN "OACT" A ON A."AcctCode" = S."AcctCode"
+          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          LEFT JOIN "MTC_CA_R_JDT" J ON J."RunId" = S."RunId" AND J."TransCode" = S."TransCode" AND IFNULL(J."AcctCode", '') = IFNULL(S."AcctCode", '')
+                                    AND IFNULL(J."OcrCode", '') = IFNULL(S."OcrCode", '') AND IFNULL(J."Project", '') = IFNULL(S."Project", '')
+                                    AND IFNULL(J."VendorCode", '') = IFNULL(S."VendorCode", '')
+          LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE S."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE S."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE S."AcctCode" LIKE X."P"))
-         ORDER BY S."TransCode", S."AcctCode", S."OcrCode", S."SrcId";
+         ORDER BY S."TransCode", J."LineNo", S."AcctCode", S."OcrCode", S."SrcId";
     ELSEIF :STYPE = '1' THEN
-        SELECT J."TransCode" AS "TransCode", J."TransName" AS "凭证名称", J."LineNo" AS "行号", J."RefDate" AS "过账日期", J."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称",
+        SELECT :fc AS "FcCode", :rid AS "运行号", J."TransCode" AS "TransCode", J."TransName" AS "凭证名称", J."LineNo" AS "分录号", X."TransId" AS "交易号 TransId", X."U_CWNum" AS "财务凭证号 U_CWNum", X."Line_ID" AS "B1 行号 Line_ID", J."RefDate" AS "过账日期", J."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称",
                J."OcrCode" AS "成本中心", J."Project" AS "项目", J."VendorCode" AS "供应商", J."Debit" AS "借方", J."Credit" AS "贷方"
           FROM "MTC_CA_R_JDT" J LEFT JOIN "OACT" A ON A."AcctCode" = J."AcctCode"
+          LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE J."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE J."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE J."AcctCode" LIKE X."P"))
          ORDER BY J."TransCode", J."LineNo";
     ELSE
-        SELECT J."TransCode" AS "TransCode", MAX(IFNULL(T."TrnsCodDsc", J."TransName")) AS "凭证名称", COUNT(*) AS "分录行数",
+        SELECT :fc AS "FcCode", :rid AS "运行号", J."TransCode" AS "TransCode", MAX(IFNULL(T."TrnsCodDsc", J."TransName")) AS "凭证名称", COUNT(*) AS "分录行数",
                SUM(J."Debit") AS "借方", SUM(J."Credit") AS "贷方", CAST(SUM(J."Debit") - SUM(J."Credit") AS DECIMAL(19,2)) AS "借贷差",
                MAX(V."BatchNum") AS "凭单批号", IFNULL(MAX(V."B1State"), '未生成凭单') AS "B1 状态",
+               MAX(X."TransId") AS "交易号 TransId", MAX(X."Number") AS "凭证编号 Number", MAX(X."U_CWNum") AS "财务凭证号 U_CWNum",
                MAX(V."CreateUser") AS "生成人", MAX(V."CreateTime") AS "生成时间"
           FROM "MTC_CA_R_JDT" J
           LEFT JOIN "OTRC" T ON T."TrnsCode" = J."TransCode"
@@ -29471,6 +29680,7 @@ BEGIN
                        FROM (SELECT "TransCode", MAX("BatchNum") AS "BatchNum", MAX("CreateUser") AS "CreateUser", MAX("CreateTime") AS "CreateTime"
                                FROM "MTC_CA_JV" WHERE "FcCode" = :fc AND "RunId" = :rid AND "Status" = 'CREATED' AND "BatchNum" IS NOT NULL
                               GROUP BY "TransCode") G) V ON V."TransCode" = J."TransCode"
+          LEFT JOIN :jv X ON X."TransCode" = J."TransCode"
          WHERE J."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE J."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE J."AcctCode" LIKE X."P"))
@@ -29479,7 +29689,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #18
+-- @stmt 成本报表 21_reports.sql #21
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R11 成本异常清单：本期需要人看一眼的物料、订单、费用池和校验项。
@@ -29561,7 +29771,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #19
+-- @stmt 成本报表 21_reports.sql #22
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R17 应付暂估（已收货未开票，含退货）：截至期末未清的收货行（扣已开票、扣基于收货的退货）和不基于收货的退货（为负）。
@@ -29691,7 +29901,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #20
+-- @stmt 成本报表 21_reports.sql #23
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R18 发出商品明细（已发货未开票，含退货）：截至期末未开票的交货行（扣已开票、扣基于交货的退货）和不基于交货的退货（为负）。
@@ -29839,7 +30049,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #21
+-- @stmt 成本报表 21_reports.sql #24
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R12 产品单位成本变动分析：本期与对比期相比单位成本变了多少，拆成材料价格、材料用量、费率、工时、委外加工费因素。
@@ -29939,7 +30149,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #22
+-- @stmt 成本报表 21_reports.sql #25
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R13 材料用量差异（损耗）：订单实际领用与按完工数折算的计划用量之差。
@@ -29997,7 +30207,7 @@ BEGIN
                        CASE WHEN :STYPE = '1' THEN "CumQ" END AS "CumQ", "PQ", "SQ", "AQ", "AA", "UP", "Note"
                   FROM :d)
          GROUP BY "Prod", "Mat", "FcCode", "OrderType", "OrderNum", "OrderEntry";
-    SELECT X."Prod" AS "产品", PM."ItemName" AS "产品名称", X."FcCode" AS "账期", X."OrderType" AS "订单单据", X."OrderNum" AS "订单号 Num",
+    SELECT X."Prod" AS "产品", PM."ItemName" AS "产品名称", X."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(X."OrderType") AS "订单单据", X."OrderNum" AS "订单号 Num",
            X."Mat" AS "材料", MM."ItemName" AS "材料名称", X."Cnt" AS "订单数", CAST(X."CumQ" AS DECIMAL(19,6)) AS "累计完工数",
            CAST(X."PQ" AS DECIMAL(19,6)) AS "订单计划用量", CAST(X."SQ" AS DECIMAL(19,6)) AS "按完工折算标准用量", CAST(X."AQ" AS DECIMAL(19,6)) AS "实际领用",
            CAST(X."AQ" - X."SQ" AS DECIMAL(19,6)) AS "差异·数量", CAST((X."AQ" - X."SQ") * 100 / NULLIF(X."SQ", 0) AS DECIMAL(19,2)) AS "差异·%",
@@ -30008,7 +30218,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #23
+-- @stmt 成本报表 21_reports.sql #26
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R14 产品毛利分析：本期开票收入与结转的销售成本（同 DN03 口径）对比。
@@ -30105,7 +30315,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #24
+-- @stmt 成本报表 21_reports.sql #27
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R15 费用池费用率趋势：各期每个费用池的归集额、工时、每工时费用及环比。
@@ -30147,7 +30357,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #25
+-- @stmt 成本报表 21_reports.sql #28
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R16 期末存货结构：期末存货按类别（原材料 / 半成品 / 产成品 / 在产品 / 发出商品）、物料组、物料的金额和占比，与对比期比较，带最后动账日期。
@@ -30221,7 +30431,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #26
+-- @stmt 成本报表 21_reports.sql #29
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R19 在产品汇总表（用户 2026-11-01）：期初在产品 + 本期领料 + 本级分摊 − 完工转出 − 关单差异 = 期末在产品（四项），
@@ -30325,7 +30535,7 @@ BEGIN
           FROM :r R LEFT JOIN "OITM" M ON M."ItemCode" = R."KMat"
          ORDER BY CASE R."KMat" WHEN '#SUBFEE' THEN 1 WHEN '#ALLOC' THEN 2 ELSE 0 END, R."KMat";
     ELSEIF :STYPE = '3' THEN
-        SELECT R."KCat" AS "核算类别", R."KOT" AS "订单单据", R."OrderNum" AS "订单号 Num", R."KOE" AS "订单 Entry", R."KWt" AS "订单类型",
+        SELECT R."KCat" AS "核算类别", "MTC_CA_F_RPT_OTNAME"(R."KOT") AS "订单单据", R."OrderNum" AS "订单号 Num", R."KOE" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(R."KWt") AS "订单类型",
                R."KProd" AS "产品", M."ItemName" AS "产品名称", R."CardCode" AS "委外供应商", R."StatusAtEnd" AS "期末状态", R."ClosedInFc" AS "按关单处理",
                CAST(R."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(R."CumQ" AS DECIMAL(19,6)) AS "累计完工",
                CAST(R."CumQ" * 100 / NULLIF(R."PlannedQty", 0) AS DECIMAL(19,2)) AS "完工率 %",
@@ -30339,7 +30549,7 @@ BEGIN
           FROM :r R LEFT JOIN "OITM" M ON M."ItemCode" = R."KProd"
          ORDER BY R."KCat", R."KOT", R."KOE";
     ELSE
-        SELECT R."KCat" AS "核算类别", R."KWt" AS "订单类型", R."Cnt" AS "订单数",
+        SELECT R."KCat" AS "核算类别", "MTC_CA_F_RPT_WTNAME"(R."KWt") AS "订单类型", R."Cnt" AS "订单数",
                CAST(R."BMat" AS DECIMAL(19,2)) AS "期初在产品·材料", CAST(R."BLab" AS DECIMAL(19,2)) AS "期初在产品·人工",
                CAST(R."BMfg" AS DECIMAL(19,2)) AS "期初在产品·制造", CAST(R."BSub" AS DECIMAL(19,2)) AS "期初在产品·委外", CAST(R."B" AS DECIMAL(19,2)) AS "期初在产品·合计",
                CAST(R."Iss" AS DECIMAL(19,2)) AS "本期·领料", CAST(R."Alc" AS DECIMAL(19,2)) AS "本期·本级分摊",
@@ -30353,7 +30563,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #27
+-- @stmt 成本报表 21_reports.sql #30
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R20 在产品明细表（用户 2026-11-01）：一行 = 账期 × 订单 × 材料，期初在产品 + 本期领料 − 完工转出 − 关单差异 = 期末在产品（四项）。
@@ -30402,7 +30612,7 @@ BEGIN
           JOIN "MTC_CA_R_ORDER_MAT" X ON X."RunId" = O."RunId" AND X."OrderType" = O."OrderType" AND X."OrderEntry" = O."OrderEntry"
           LEFT JOIN :pl P ON P."RunId" = X."RunId" AND P."OrderType" = X."OrderType" AND P."OrderEntry" = X."OrderEntry" AND P."ItemCode" = X."ItemCode"
          WHERE (:nMat = 0 OR EXISTS (SELECT 1 FROM :lMat L WHERE X."ItemCode" LIKE L."P"));
-    SELECT D."FcCode" AS "账期", D."Cat" AS "核算类别", D."OrderType" AS "订单单据", D."OrderNum" AS "订单号 Num", D."OrderEntry" AS "订单 Entry", D."WorType" AS "订单类型",
+    SELECT D."FcCode" AS "账期", D."Cat" AS "核算类别", "MTC_CA_F_RPT_OTNAME"(D."OrderType") AS "订单单据", D."OrderNum" AS "订单号 Num", D."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(D."WorType") AS "订单类型",
            D."ItemCode" AS "产品", D."ItemName" AS "产品名称", D."Grp" AS "物料组", D."CardCode" AS "委外供应商", D."PostDate" AS "订单日期",
            D."StatusAtEnd" AS "期末状态", D."ClosedInFc" AS "按关单处理",
            CAST(D."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(D."CumQ" AS DECIMAL(19,6)) AS "累计完工",
@@ -30429,7 +30639,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #28
+-- @stmt 成本报表 21_reports.sql #31
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R21 成本结转分录清单（用户 2026-11-05）：执行台在 B1 生成的日记账分录，过账和冲销情况。
@@ -30516,7 +30726,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #29
+-- @stmt 成本报表 21_reports.sql #32
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- 交货 / 销售退货行的单位成本（用户 2026-11-05，R23 也要用，从 reports/MTC_RPT_F_SALE_COST.sql 搬进部署包，两处保持一致）
@@ -30570,7 +30780,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #30
+-- @stmt 成本报表 21_reports.sql #33
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- 销售走势事件（用户 2026-11-05，R23 用）：业务端，直接读 B1 单据，和凭证、总账无关；不依赖发出商品结果表，所以历史月份也能算。
@@ -30684,7 +30894,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #31
+-- @stmt 成本报表 21_reports.sql #34
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R22 产品生产成本走势：物料每个月的完工数量、单位成本和料工费委外构成（用户 2026-11-05）。
@@ -30751,7 +30961,7 @@ BEGIN
 END
 
 @@
--- @stmt 成本报表 21_reports.sql #32
+-- @stmt 成本报表 21_reports.sql #35
 -- @needs @MTC_SALORDTYPE,@MTC_OMRV,@MTC_COST_IOTYPE,OINV.U_SalOrdType,ORIN.U_SalOrdType,ODLN.U_SalOrdType,ORDN.U_SalOrdType,PDN1.U_InitPrice,PDN1.U_IsPrice
 -- ---------------------------------------------------------------------
 -- R23 产品销售毛利走势：物料每个月的收入、成本、毛利，已开票 + 暂估（用户 2026-11-05）。

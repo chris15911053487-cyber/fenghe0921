@@ -420,8 +420,10 @@ def jv_body(rid, fc, code, rows, vendor_udf, run_udf=False, rev_date=None):
         d0 = decimal.Decimal(str(o['Debit'] or 0))
         amt = (d0 - decimal.Decimal(str(o['Credit'] or 0))).quantize(decimal.Decimal('0.01'))
         if amt == 0: continue
-        # 借方红字（JZ05，Debit < 0）：负数留在借方，不转成贷方（用户 2026-11-04）
-        on_dr = amt > 0 or d0 < 0
+        # 借方红字（JZ05、YF01 / IO01 费用，Debit < 0）：负数留在借方，不转成贷方（用户 2026-11-04）；
+        # 贷方红字（YF01 / IO01 存货，Credit < 0）：负数留在贷方（用户 2026-11-08）
+        c0 = decimal.Decimal(str(o['Credit'] or 0))
+        on_dr = d0 < 0 or (c0 >= 0 and amt > 0)
         ln = {'AccountCode': o['Acct'], 'Debit': float(amt) if on_dr else 0.0, 'Credit': 0.0 if on_dr else float(-amt)}
         if on_dr: dr += amt
         else: cr -= amt

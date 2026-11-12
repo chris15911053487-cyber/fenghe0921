@@ -56,7 +56,7 @@ const LABEL = {
   TransCode:"凭证代码", TransName:"名称", Lines:"行数", Debit:"借方", Credit:"贷方", NoAcct:"缺科目", LineNo:"行", RefDate:"日期",
   AcctCode:"科目", OcrCode:"成本中心", Project:"项目",
   OrderNum:"订单号 Num", ItemName:"名称", PostDate:"下单日期", B1Status:"当前状态", CloseDate:"关闭日期", StatusAtEnd:"期末状态", InScope:"计算范围",
-  CardCode:"业务伙伴", PrevRecvQty:"上期累计完工", Ratio:"结转比例", AllocMfg:"分摊制造费用", AllocLab:"分摊人工", LocalMfg:"本级制造", LocalLab:"本级人工", LocalSub:"本级委外",
+  CardCode:"业务伙伴", PrevRecvQty:"上期累计完工", Ratio:"结转比例", AllocMfg:"分摊制造费用", AllocLab:"分摊人工", LocalMat:"本级材料", LocalMfg:"本级制造", LocalLab:"本级人工", LocalSub:"本级委外",
   PlanQty:"计划用量", OpenIssQty:"期初累计领料数", OpenIssAmt:"期初累计领料", OpenCarAmt:"期初累计结转", IssQty:"本期领料数", IssAmt:"本期领料",
   CarAmt:"本期结转", CarMat:"结转材料", CarMfg:"结转制造", CarLab:"结转人工", CarSub:"结转委外", ClsAmt:"关单差异",
   WipMat:"在产品材料", WipMfg:"在产品制造", WipLab:"在产品人工", WipSub:"在产品委外", ClosedCnt:"本期关单数",

@@ -23,6 +23,37 @@ UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "De
 @@
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('RPT_GRP_CLASS', 'PARAM', '凭证与对账', 520, '成本报表：物料组对应的存货类别', 'LIST', NULL, '物料组:类别，逗号分隔，如 101:原材料,105:产成品；可以为空 = 全部按 BOM 判断') WITH PRIMARY KEY
 @@
+-- 单据类型的中文名（用户 2026-11-11：报表上显示中文）：B1 对象类型 + 订单（202 / MTC_OWOR）+ 自定义单据，名称同视图 MTC_DocType（订单两项同 MTC_CA_F_RPT_OTNAME）；认不出的原样返回代码
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_DTNAME" (IN ObjType NVARCHAR(20))
+RETURNS N NVARCHAR(30)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :ObjType
+           WHEN '13' THEN '应收发票' WHEN '14' THEN '应收贷项' WHEN '15' THEN '销售交货' WHEN '16' THEN '销售退货' WHEN '17' THEN '销售订单'
+           WHEN '18' THEN '应付发票' WHEN '19' THEN '应付贷项' WHEN '20' THEN '采购收货' WHEN '21' THEN '采购退货' WHEN '22' THEN '采购订单'
+           WHEN '23' THEN '销售报价单' WHEN '24' THEN '收款单' WHEN '29' THEN '日记帐凭证' WHEN '30' THEN '日记帐分录' WHEN '46' THEN '付款单'
+           WHEN '59' THEN '其他收货' WHEN '60' THEN '其他发货' WHEN '67' THEN '库存转储' WHEN '162' THEN '库存重估' WHEN '10000071' THEN '盘点过帐'
+           WHEN '202' THEN '生产订单' WHEN 'MTC_OWOR' THEN '返工单' WHEN 'MTC_OMRV' THEN '库存重估单'
+           WHEN 'MTC_CSOIGE' THEN '领料申请' WHEN 'MTC_FHTZ' THEN '发货通知单' WHEN 'MTC_JCTZ' THEN '采购到货单'
+           ELSE :ObjType END;
+END
+@@
+-- 订单单据、订单类型的中文名（用户 2026-11-11：报表上显示中文，名称同旧 CO4011 / CO4013）；认不出的原样返回代码，空返回空
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_OTNAME" (IN OrderType NVARCHAR(20))
+RETURNS N NVARCHAR(20)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :OrderType WHEN '202' THEN '生产订单' WHEN 'MTC_OWOR' THEN '返工单' ELSE :OrderType END;
+END
+@@
+CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_WTNAME" (IN WorType NVARCHAR(10))
+RETURNS N NVARCHAR(20)
+LANGUAGE SQLSCRIPT AS
+BEGIN
+    N := CASE :WorType WHEN '10' THEN '生产计划单' WHEN '20' THEN '包装计划单' WHEN '30' THEN '返工计划单' WHEN '40' THEN '生产试打'
+                       WHEN '50' THEN '委外工单' ELSE :WorType END;
+END
+@@
 -- 逗号列表拆成行（空串 → 0 行）；最多 200 个值。V = 值，P = 开头匹配用的 LIKE 模式；值以 = 开头时精确匹配（如 =A1 不会匹配 A10，执行台钻取明细时用）
 CREATE OR REPLACE FUNCTION "MTC_CA_F_RPT_LIST" (IN Str NVARCHAR(5000))
 RETURNS TABLE ("V" NVARCHAR(200), "P" NVARCHAR(201))
@@ -308,8 +339,8 @@ BEGIN
                  IFNULL(B."Q", 0) + SUM(M."Qty") OVER (PARTITION BY M."ItemCode" ORDER BY M."FcCode", M."DocDate", M."LineId" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "BalQ",
                  IFNULL(B."A", 0) + SUM(M."Amount") OVER (PARTITION BY M."ItemCode" ORDER BY M."FcCode", M."DocDate", M."LineId" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "BalA"
             FROM :mv M LEFT JOIN :beg B ON B."ItemCode" = M."ItemCode";
-    SELECT X."账期", X."物料", M."ItemName" AS "名称", X."日期", X."单据类型", X."单号 Num", X."行号", X."交易类型", T."Name" AS "交易类型名称",
-           X."业务类型", X."仓库", X."订单号 Num", X."订单类型",
+    SELECT X."账期", X."物料", M."ItemName" AS "名称", X."日期", "MTC_CA_F_RPT_DTNAME"(X."单据类型") AS "单据类型", X."单号 Num", X."行号", X."交易类型", T."Name" AS "交易类型名称",
+           X."业务类型", X."仓库", X."订单号 Num", "MTC_CA_F_RPT_WTNAME"(X."订单类型") AS "订单类型",
            X."入库·数量", CAST(X."入库·金额" / NULLIF(X."入库·数量", 0) AS DECIMAL(19,6)) AS "入库·单价", X."入库·金额",
            X."出库·数量", CAST(X."出库·金额" / NULLIF(X."出库·数量", 0) AS DECIMAL(19,6)) AS "出库·单价", X."出库·金额",
            X."结存·数量", CAST(X."结存·金额" / NULLIF(X."结存·数量", 0) AS DECIMAL(19,6)) AS "结存·单价", X."结存·金额",
@@ -374,7 +405,7 @@ BEGIN
              AND (:nGrp = 0 OR EXISTS (SELECT 1 FROM :lGrp X WHERE TO_NVARCHAR(M."ItmsGrpCod") = X."V"))
              AND (IFNULL(:Scope, '') = '' OR (:Scope = '1' AND O."RecvQty" <> 0) OR (:Scope = '2' AND O."ClosedInFc" = 'Y') OR (:Scope = '3' AND O."WipAmt" <> 0));
     IF :STYPE = '1' THEN
-        SELECT O."FcCode" AS "账期", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", O."WorType" AS "订单类型",
+        SELECT O."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(O."WorType") AS "订单类型",
                O."ItemCode" AS "产品", O."ItemName" AS "产品名称",
                M."ItemCode" AS "材料",
                CASE WHEN M."ItemCode" = '#SUBFEE' THEN '委外加工费' ELSE I."ItemName" END AS "材料名称",
@@ -403,7 +434,7 @@ BEGIN
                      SUM("WipMat") AS "WMat", SUM("WipLab") AS "WLab", SUM("WipMfg") AS "WMfg", SUM("WipSub") AS "WSub"
                 FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" IN (SELECT "RunId" FROM :runs)
                GROUP BY "RunId", "OrderType", "OrderEntry";
-        SELECT O."FcCode" AS "账期", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", O."WorType" AS "订单类型",
+        SELECT O."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(O."WorType") AS "订单类型",
                O."ItemCode" AS "产品", O."ItemName" AS "产品名称", O."Grp" AS "物料组", O."iLevel" AS "层级", O."CardCode" AS "委外供应商",
                O."StatusAtEnd" AS "期末状态", O."ClosedInFc" AS "按关单处理",
                CAST(O."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(O."PrevRecvQty" AS DECIMAL(19,6)) AS "上期累计完工", CAST(O."RecvQty" AS DECIMAL(19,6)) AS "本期完工",
@@ -432,11 +463,15 @@ END
 -- ---------------------------------------------------------------------
 -- R02 完工产品成本汇总：每个产品本期完工数量、四项成本、单位成本和构成。
 -- 参数：FcFrom, FcTo, Item 产品, ItemGrp 物料组, Lvl 层级, WorType 订单类型, STYPE 0 按产品 / 1 产品 × 订单
--- 口径：MTC_CA_R_ORDER 本期完工成本（Cost*，含本级分摊），只列本期有完工或有完工成本的订单；多个账期累加。
+-- 口径：MTC_CA_R_ORDER 本期完工成本（Cost*，含本级分摊），只列本期有完工或有完工成本的订单；多个账期时按产品显示也按账期分行（第一列账期，用户 2026-11-11）。
 --       成本是还原后的：完工成本·制造 = 本级分摊·制造（本期费用池分到这张订单，随完工全部转出）+ 领料带入·制造（结转的材料和半成品里含的制造，含期初在产品），
 --       人工同理。多层产品同一笔费用在半成品和成品上各算一次，所以完工成本·制造的合计大于当期分摊（用户 2026-11-06）。
 --       完工成本·委外 = 本级分摊·委外（这张订单自己的加工费 '#SUBFEE' 本期结转，直接计入订单，不走费用池）+ 领料带入·委外（半成品里含的加工费）；
 --       加工费结转按有入库时全部转出，可能含以前账期留在订单上的，所以不一定等于本期发生的加工费，委外工单上的合计 = R07 完工转出·加工费。
+--       本级分摊·材料 = 完工成本·合计 − 本级分摊·制造 − 人工 − 委外，即领用的材料和半成品全额（半成品里含的料工费都算材料），同 R22 本级口径；
+--       本级分摊四项合计 = 完工成本·合计（用户 2026-11-11）。
+--       入库单价 = 完工入库行（R_LINE Cat = RCPT）的金额合计 ÷ 数量合计，用来核对单位成本·合计：入库行按订单成本 × 行数量 ÷ 本期入库数分摊、
+--       尾差挤数量最大的行，正常两者只差分位；差得多说明入库行和订单成本没对上（用户 2026-11-11）。
 -- 勾稽：总成本 = R01 完工转出合计 = R03 生产入库（V01）；不加条件时本级分摊·制造 / 人工合计 = R06 已分配（V04）。
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE "MTC_CA_RPT_02_PRODCOST" (
@@ -453,11 +488,16 @@ BEGIN
     ord = SELECT U."FcCode", O."RunId", O."OrderType", O."OrderEntry", S."OrderNum", O."WorType", O."ItemCode", M."ItemName",
                  TO_NVARCHAR(M."ItmsGrpCod") AS "Grp", G."ItmsGrpNam" AS "GrpName", O."iLevel",
                  O."RecvQty", O."CostMat", O."CostLab", O."CostMfg", O."CostSub", O."CostAmt", O."AllocLab", O."AllocMfg",
-                 IFNULL(F."CarSub", 0) AS "OwnSub"
+                 IFNULL(F."CarSub", 0) AS "OwnSub", IFNULL(RC."Qty", 0) AS "RcptQty", IFNULL(RC."Amt", 0) AS "RcptAmt"
             FROM :runs U
             JOIN "MTC_CA_R_ORDER" O ON O."RunId" = U."RunId"
             LEFT JOIN "MTC_CA_S_ORDER" S ON S."RunId" = O."RunId" AND S."OrderType" = O."OrderType" AND S."OrderEntry" = O."OrderEntry"
             LEFT JOIN "MTC_CA_R_ORDER_MAT" F ON F."RunId" = O."RunId" AND F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" AND F."ItemCode" = '#SUBFEE'
+            LEFT JOIN (SELECT L."RunId", L."OrderType", L."OrderEntry", SUM(L."Qty") AS "Qty", SUM(L."Amount") AS "Amt"
+                         FROM "MTC_CA_R_LINE" L
+                        WHERE L."Cat" = 'RCPT' AND L."RunId" IN (SELECT "RunId" FROM :runs)
+                        GROUP BY L."RunId", L."OrderType", L."OrderEntry") RC
+                   ON RC."RunId" = O."RunId" AND RC."OrderType" = O."OrderType" AND RC."OrderEntry" = O."OrderEntry"
             LEFT JOIN "OITM" M ON M."ItemCode" = O."ItemCode"
             LEFT JOIN "OITB" G ON G."ItmsGrpCod" = M."ItmsGrpCod"
            WHERE (O."RecvQty" <> 0 OR O."CostAmt" <> 0)
@@ -466,34 +506,39 @@ BEGIN
              AND (:nLvl = 0 OR EXISTS (SELECT 1 FROM :lLvl X WHERE TO_NVARCHAR(O."iLevel") = X."V"))
              AND (:nWt = 0 OR EXISTS (SELECT 1 FROM :lWt X WHERE O."WorType" = X."V"));
     IF :STYPE = '1' THEN
-        SELECT "ItemCode" AS "产品", "ItemName" AS "名称", "FcCode" AS "账期", "OrderType" AS "订单单据", "OrderNum" AS "订单号 Num",
-               "OrderEntry" AS "订单 Entry", "WorType" AS "订单类型",
+        SELECT "ItemCode" AS "产品", "ItemName" AS "名称", "FcCode" AS "账期",
+               "MTC_CA_F_RPT_OTNAME"("OrderType") AS "订单单据", "OrderNum" AS "订单号 Num",
+               "OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"("WorType") AS "订单类型",
                CAST("RecvQty" AS DECIMAL(19,6)) AS "完工数量",
                CAST("CostMat" AS DECIMAL(19,2)) AS "完工成本·材料", CAST("CostLab" AS DECIMAL(19,2)) AS "完工成本·人工",
                CAST("CostMfg" AS DECIMAL(19,2)) AS "完工成本·制造", CAST("CostSub" AS DECIMAL(19,2)) AS "完工成本·委外",
                CAST("CostAmt" AS DECIMAL(19,2)) AS "完工成本·合计",
+               CAST("CostAmt" - "AllocMfg" - "AllocLab" - "OwnSub" AS DECIMAL(19,2)) AS "本级分摊·材料",
                CAST("AllocMfg" AS DECIMAL(19,2)) AS "本级分摊·制造", CAST("AllocLab" AS DECIMAL(19,2)) AS "本级分摊·人工", CAST("OwnSub" AS DECIMAL(19,2)) AS "本级分摊·委外",
                CAST("CostMfg" - "AllocMfg" AS DECIMAL(19,2)) AS "领料带入·制造", CAST("CostLab" - "AllocLab" AS DECIMAL(19,2)) AS "领料带入·人工", CAST("CostSub" - "OwnSub" AS DECIMAL(19,2)) AS "领料带入·委外",
                CAST("CostAmt" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·合计",
+               CAST("RcptAmt" / NULLIF("RcptQty", 0) AS DECIMAL(19,6)) AS "入库单价",
                CAST("CostMat" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·材料", CAST("CostLab" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·人工",
                CAST("CostMfg" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·制造", CAST("CostSub" / NULLIF("RecvQty", 0) AS DECIMAL(19,6)) AS "单位成本·委外"
           FROM :ord ORDER BY "ItemCode", "FcCode", "OrderType", "OrderEntry";
     ELSE
-        SELECT "Grp" AS "物料组", MAX("GrpName") AS "物料组名称", "ItemCode" AS "产品", MAX("ItemName") AS "名称", MAX("iLevel") AS "层级",
+        SELECT "FcCode" AS "账期", "Grp" AS "物料组", MAX("GrpName") AS "物料组名称", "ItemCode" AS "产品", MAX("ItemName") AS "名称", MAX("iLevel") AS "层级",
                COUNT(*) AS "订单数", CAST(SUM("RecvQty") AS DECIMAL(19,6)) AS "完工数量",
                CAST(SUM("CostMat") AS DECIMAL(19,2)) AS "完工成本·材料", CAST(SUM("CostLab") AS DECIMAL(19,2)) AS "完工成本·人工",
                CAST(SUM("CostMfg") AS DECIMAL(19,2)) AS "完工成本·制造", CAST(SUM("CostSub") AS DECIMAL(19,2)) AS "完工成本·委外",
                CAST(SUM("CostAmt") AS DECIMAL(19,2)) AS "完工成本·合计",
+               CAST(SUM("CostAmt" - "AllocMfg" - "AllocLab" - "OwnSub") AS DECIMAL(19,2)) AS "本级分摊·材料",
                CAST(SUM("AllocMfg") AS DECIMAL(19,2)) AS "本级分摊·制造", CAST(SUM("AllocLab") AS DECIMAL(19,2)) AS "本级分摊·人工", CAST(SUM("OwnSub") AS DECIMAL(19,2)) AS "本级分摊·委外",
                CAST(SUM("CostMfg" - "AllocMfg") AS DECIMAL(19,2)) AS "领料带入·制造", CAST(SUM("CostLab" - "AllocLab") AS DECIMAL(19,2)) AS "领料带入·人工", CAST(SUM("CostSub" - "OwnSub") AS DECIMAL(19,2)) AS "领料带入·委外",
                CAST(SUM("CostAmt") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·合计",
+               CAST(SUM("RcptAmt") / NULLIF(SUM("RcptQty"), 0) AS DECIMAL(19,6)) AS "入库单价",
                CAST(SUM("CostMat") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·材料", CAST(SUM("CostLab") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·人工",
                CAST(SUM("CostMfg") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·制造", CAST(SUM("CostSub") / NULLIF(SUM("RecvQty"), 0) AS DECIMAL(19,6)) AS "单位成本·委外",
                CAST(SUM("CostMat") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·材料", CAST(SUM("CostLab") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·人工",
                CAST(SUM("CostMfg") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·制造", CAST(SUM("CostSub") * 100 / NULLIF(SUM("CostAmt"), 0) AS DECIMAL(19,2)) AS "构成 %·委外"
           FROM :ord
-         GROUP BY "Grp", "ItemCode"
-         ORDER BY LPAD(IFNULL("Grp", ''), 10, '0'), "ItemCode";
+         GROUP BY "FcCode", "Grp", "ItemCode"
+         ORDER BY "FcCode", LPAD(IFNULL("Grp", ''), 10, '0'), "ItemCode";
     END IF;
 END
 @@
@@ -556,7 +601,7 @@ BEGIN
          GROUP BY L."Prod", L."ItemCode" ORDER BY L."Prod", L."ItemCode";
     ELSEIF :STYPE = '1' THEN
         SELECT L."ItemCode" AS "材料", MAX(M."ItemName") AS "材料名称", L."Dest" AS "去向", L."FcCode" AS "账期",
-               L."OrderType" AS "订单单据", L."OrderNum" AS "订单号 Num", L."WorType" AS "订单类型", L."Prod" AS "产品", MAX(P."ItemName") AS "产品名称",
+               MAX("MTC_CA_F_RPT_OTNAME"(L."OrderType")) AS "订单单据", L."OrderNum" AS "订单号 Num", MAX("MTC_CA_F_RPT_WTNAME"(L."WorType")) AS "订单类型", L."Prod" AS "产品", MAX(P."ItemName") AS "产品名称",
                CASE WHEN L."OrderEntry" IS NULL THEN L."AcctCode" END AS "科目", MAX(A."AcctName") AS "科目名称",
                CAST(-SUM(L."Qty") AS DECIMAL(19,6)) AS "耗用·数量", CAST(-SUM(L."Amount") / NULLIF(-SUM(L."Qty"), 0) AS DECIMAL(19,6)) AS "耗用·单价",
                CAST(-SUM(L."Amount") AS DECIMAL(19,2)) AS "耗用·金额"
@@ -735,7 +780,7 @@ BEGIN
          ORDER BY D."FcCode", CASE WHEN D."PoolCode" IS NULL THEN 1 ELSE 0 END, D."PoolCode", D."ItemCode";
     ELSEIF :STYPE = '2' THEN
         SELECT U."FcCode" AS "账期", A."PoolCode" AS "费用池", C."PoolName" AS "费用池名称", CASE A."Elem" WHEN 'MFG' THEN '制造' ELSE '人工' END AS "要素",
-               A."OrderType" AS "订单单据", S."OrderNum" AS "订单号 Num", A."OrderEntry" AS "订单 Entry", S."WorType" AS "订单类型",
+               "MTC_CA_F_RPT_OTNAME"(A."OrderType") AS "订单单据", S."OrderNum" AS "订单号 Num", A."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(S."WorType") AS "订单类型",
                S."ItemCode" AS "产品", M."ItemName" AS "产品名称",
                CAST(A."Hours" AS DECIMAL(19,6)) AS "单位工时", CAST(A."RecvQty" AS DECIMAL(19,6)) AS "本期入库数", CAST(A."Weight" AS DECIMAL(19,6)) AS "工时",
                CAST(A."Ratio" * 100 AS DECIMAL(19,4)) AS "占池比例 %", CAST(A."Amount" AS DECIMAL(19,2)) AS "分摊金额"
@@ -776,7 +821,7 @@ BEGIN
         SELECT S."FcCode" AS "账期", S."PoolCode" AS "费用池", C."PoolName" AS "费用池名称", CASE S."Elem" WHEN 'MFG' THEN '制造' ELSE '人工' END AS "要素",
                CASE S."Src" WHEN 'JDT' THEN '凭证' WHEN 'MRV' THEN '库存重估' WHEN 'PROWW' THEN '委外重估' WHEN 'SHARED' THEN '公摊材料' WHEN 'CLOSEDIF' THEN '关单差异' WHEN 'WWHIST' THEN '历史委外差异' ELSE S."Src" END AS "来源",
                S."SrcTrans" AS "凭证代码 / 交易类型", S."AcctCode" AS "科目", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."DocDate" AS "日期",
-               S."SrcObj" AS "单据类型", S."DocNum" AS "单号 Num", S."JdtNum" AS "凭证编号 Number", S."SrcKey" AS "来源键",
+               "MTC_CA_F_RPT_DTNAME"(S."SrcObj") AS "单据类型", S."DocNum" AS "单号 Num", S."JdtNum" AS "凭证编号 Number", S."SrcKey" AS "来源键",
                S."ItemCode" AS "物料", CAST(S."Qty" AS DECIMAL(19,6)) AS "数量", CAST(S."Amount" AS DECIMAL(19,2)) AS "金额", S."Note" AS "备注"
           FROM :src S
           LEFT JOIN "MTC_CA_C_POOL" C ON C."PoolCode" = S."PoolCode"
@@ -835,7 +880,7 @@ BEGIN
              AND (:nOrd = 0 OR EXISTS (SELECT 1 FROM :lOrd X WHERE S."OrderNum" LIKE X."P"))
              AND (:nProd = 0 OR EXISTS (SELECT 1 FROM :lProd X WHERE O."ItemCode" LIKE X."P"));
     IF :STYPE = '2' THEN
-        SELECT O."FcCode" AS "账期", O."CardCode" AS "供应商", O."OrderType" AS "订单单据", O."OrderNum" AS "订单号 Num", O."ItemCode" AS "产品",
+        SELECT O."FcCode" AS "账期", O."CardCode" AS "供应商", "MTC_CA_F_RPT_OTNAME"(O."OrderType") AS "订单单据", O."OrderNum" AS "订单号 Num", O."ItemCode" AS "产品",
                M."ItemCode" AS "材料", CASE WHEN M."ItemCode" = '#SUBFEE' THEN '委外加工费' ELSE I."ItemName" END AS "材料名称",
                CAST(M."OpenIssMat" + M."OpenIssLab" + M."OpenIssMfg" + M."OpenIssSub" - M."OpenCarMat" - M."OpenCarLab" - M."OpenCarMfg" - M."OpenCarSub" AS DECIMAL(19,2)) AS "期初在产品",
                CAST(M."IssQty" AS DECIMAL(19,6)) AS "本期发出·数量", CAST(M."IssMat" + M."IssLab" + M."IssMfg" + M."IssSub" AS DECIMAL(19,2)) AS "本期发出·金额",
@@ -863,7 +908,7 @@ BEGIN
              GROUP BY O."FcCode", O."CardCode", O."OrderType", O."OrderEntry", O."OrderNum", O."ItemCode", O."StatusAtEnd", O."ClosedInFc",
                       O."PlannedQty", O."RecvQty", O."CostAmt", O."CloseDifAmt";
         IF :STYPE = '1' THEN
-            SELECT D."FcCode" AS "账期", D."CardCode" AS "供应商", C."CardName" AS "供应商名称", D."OrderType" AS "订单单据", D."OrderNum" AS "订单号 Num",
+            SELECT D."FcCode" AS "账期", D."CardCode" AS "供应商", C."CardName" AS "供应商名称", "MTC_CA_F_RPT_OTNAME"(D."OrderType") AS "订单单据", D."OrderNum" AS "订单号 Num",
                    D."OrderEntry" AS "订单 Entry", D."ItemCode" AS "产品", M."ItemName" AS "产品名称", D."StatusAtEnd" AS "期末状态", D."ClosedInFc" AS "按关单处理",
                    CAST(D."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(D."RecvQty" AS DECIMAL(19,6)) AS "本期完工",
                    CAST(D."BMat" AS DECIMAL(19,2)) AS "期初在产品·材料", CAST(D."BFee" AS DECIMAL(19,2)) AS "期初在产品·加工费",
@@ -966,7 +1011,7 @@ BEGIN
           FROM (SELECT B.*, CASE :STYPE WHEN '1' THEN B."CardCode" WHEN '2' THEN B."ObjType" || '-' || TO_NVARCHAR(B."DocEntry") || '-' || TO_NVARCHAR(B."LineNum") ELSE B."ItemCode" END AS "K"
                   FROM :b2 B)
          GROUP BY "K";
-    SELECT "K" AS "代码", "N" AS "名称", "ObjType" AS "单据类型", "DocNum" AS "单号 Num", "LineNum" AS "行号", "DocDate" AS "单据日期",
+    SELECT "K" AS "代码", "N" AS "名称", "MTC_CA_F_RPT_DTNAME"("ObjType") AS "单据类型", "DocNum" AS "单号 Num", "LineNum" AS "行号", "DocDate" AS "单据日期",
            "CardCode" AS "客户", "CustType" AS "客户类型", "ItemCode" AS "物料",
            CAST("Beg" AS DECIMAL(19,2)) AS "期初发出商品", CAST("Iss" AS DECIMAL(19,2)) AS "本期·发货", CAST("Ret0" AS DECIMAL(19,2)) AS "本期·独立退货",
            CAST("Inv" AS DECIMAL(19,2)) AS "本期消耗·开票", CAST("Rin" AS DECIMAL(19,2)) AS "本期消耗·贷项", CAST("Ret" AS DECIMAL(19,2)) AS "本期消耗·基于交货退货",
@@ -1015,6 +1060,10 @@ END
 -- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细金额正 = 借、负 = 贷。
 -- 勾稽：来源明细合计 = 分录合计（V06）。
 -- 列名：凭证代码、科目编码这两列输出英文字段名 TransCode、AcctCode（用户 2026-11-07，这张报表特殊），执行台按 rpt_defs.json 的 alias 显示中文。
+-- 运行号 = 这张报表取数的成本运行（MTC_CA_RUN.RunId，规则同 R00），三种显示方式都有；分录号 = R_JDT.LineNo（凭证代码内的行号），分录、来源明细都有，
+--   来源明细按分录号排，同一分录号的来源合计 = 该分录金额（用户 2026-11-11）。
+-- 交易号 TransId / 凭证编号 Number / B1 行号 Line_ID：凭单过账后 B1 日记账分录的编号（按 MTC_CA_JV 批号找 OJDT，行按分录号 − 1 并核对科目、金额），待过账时为空（用户 2026-11-11）。
+-- 财务凭证号 U_CWNum：同一张 OJDT 的自定义字段 OJDT.U_CWNum，跟交易号同时显示，待过账为空（用户 2026-11-11）。
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE "MTC_CA_RPT_10_JV" (IN Fc NVARCHAR(10), IN TransCode NVARCHAR(500), IN Acct NVARCHAR(500), IN STYPE NVARCHAR(1))
 LANGUAGE SQLSCRIPT READS SQL DATA AS
@@ -1027,15 +1076,31 @@ BEGIN
         SELECT '这个账期没有成功的正式计算（看 R00）' AS "说明" FROM DUMMY;
         RETURN;
     END IF;
+    -- B1 交易号（用户 2026-11-11）：MTC_CA_JV 最新已生成的凭单批号 → 过账后的 OJDT（同 BatchNum、TransCode；不含 B1 自动冲销的 StornoToTr 凭证）；
+    --   待过账、已在 B1 删除的没有。行：执行台按分录号顺序写凭单，Line_ID = 分录号 − 1，再核对科目（FormatCode 换 AcctCode，同 dev_server SQL_JV_LINES）
+    --   和借 − 贷金额，对不上的留空
+    jv = SELECT G."TransCode", G."BatchNum", MAX(H."TransId") AS "TransId", MAX(H."Number") AS "Number", MAX(H."U_CWNum") AS "U_CWNum"
+           FROM (SELECT "TransCode", MAX("BatchNum") AS "BatchNum" FROM "MTC_CA_JV"
+                  WHERE "FcCode" = :fc AND "RunId" = :rid AND "Status" = 'CREATED' AND "BatchNum" IS NOT NULL GROUP BY "TransCode") G
+           LEFT JOIN "OJDT" H ON H."BatchNum" = G."BatchNum" AND H."TransCode" = G."TransCode" AND H."StornoToTr" IS NULL
+          GROUP BY G."TransCode", G."BatchNum";
+    jl = SELECT J."TransCode", J."LineNo", L."TransId", L."Line_ID", V."U_CWNum"
+           FROM :jv V
+           JOIN "MTC_CA_R_JDT" J ON J."RunId" = :rid AND J."TransCode" = V."TransCode"
+           LEFT JOIN "OACT" A1 ON A1."AcctCode" = J."AcctCode"
+           LEFT JOIN (SELECT "FormatCode", MAX("AcctCode") AS "AcctCode" FROM "OACT" WHERE IFNULL("FormatCode", '') <> '' GROUP BY "FormatCode") A2
+             ON A1."AcctCode" IS NULL AND A2."FormatCode" = J."AcctCode"
+           JOIN "JDT1" L ON L."TransId" = V."TransId" AND L."Line_ID" = J."LineNo" - 1
+                        AND L."Account" = IFNULL(A1."AcctCode", A2."AcctCode") AND L."Debit" - L."Credit" = J."Debit" - J."Credit";
     IF :STYPE = '2' THEN
-        SELECT S."TransCode" AS "TransCode", S."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."VendorCode" AS "供应商",
+        SELECT :fc AS "FcCode", :rid AS "运行号", S."TransCode" AS "TransCode", J."LineNo" AS "分录号", X."TransId" AS "交易号 TransId", X."U_CWNum" AS "财务凭证号 U_CWNum", X."Line_ID" AS "B1 行号 Line_ID", S."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称", S."OcrCode" AS "成本中心", S."VendorCode" AS "供应商",
                CASE S."SrcType" WHEN 'LINE' THEN '单据行' WHEN 'ORDER' THEN '订单' WHEN 'DOC' THEN 'B1 单据行' WHEN 'GL' THEN '总账分录' WHEN 'OMRV' THEN '重估单'
                                 WHEN 'ITEM' THEN '物料尾差' ELSE S."SrcType" END AS "来源类型",
                S."SrcKey" AS "来源键",
                CAST(CASE WHEN S."Amount" > 0 THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
                CAST(CASE WHEN S."Amount" < 0 THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
                COALESCE(D."DocDate", CAST(NULL AS DATE)) AS "单据日期",
-               COALESCE(D."ObjType", O."OrderType") AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
+               "MTC_CA_F_RPT_DTNAME"(COALESCE(D."ObjType", O."OrderType")) AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
                COALESCE(L."ItemCode", O."ItemCode") AS "物料", L."TransCode" AS "交易类型", CAST(L."Qty" AS DECIMAL(19,6)) AS "数量",
                LO."OrderNum" AS "订单号 Num", S."Note" AS "备注"
           FROM "MTC_CA_R_JDT_SRC" S
@@ -1045,22 +1110,29 @@ BEGIN
           LEFT JOIN "MTC_CA_S_ORDER" LO ON LO."RunId" = L."RunId" AND LO."OrderType" = L."OrderType" AND LO."OrderEntry" = L."OrderEntry"
           LEFT JOIN "MTC_CA_S_ORDER" O ON S."SrcType" = 'ORDER' AND O."RunId" = S."RunId" AND O."OrderType" || '-' || TO_NVARCHAR(O."OrderEntry") = S."SrcKey"
           LEFT JOIN "OACT" A ON A."AcctCode" = S."AcctCode"
+          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          LEFT JOIN "MTC_CA_R_JDT" J ON J."RunId" = S."RunId" AND J."TransCode" = S."TransCode" AND IFNULL(J."AcctCode", '') = IFNULL(S."AcctCode", '')
+                                    AND IFNULL(J."OcrCode", '') = IFNULL(S."OcrCode", '') AND IFNULL(J."Project", '') = IFNULL(S."Project", '')
+                                    AND IFNULL(J."VendorCode", '') = IFNULL(S."VendorCode", '')
+          LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE S."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE S."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE S."AcctCode" LIKE X."P"))
-         ORDER BY S."TransCode", S."AcctCode", S."OcrCode", S."SrcId";
+         ORDER BY S."TransCode", J."LineNo", S."AcctCode", S."OcrCode", S."SrcId";
     ELSEIF :STYPE = '1' THEN
-        SELECT J."TransCode" AS "TransCode", J."TransName" AS "凭证名称", J."LineNo" AS "行号", J."RefDate" AS "过账日期", J."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称",
+        SELECT :fc AS "FcCode", :rid AS "运行号", J."TransCode" AS "TransCode", J."TransName" AS "凭证名称", J."LineNo" AS "分录号", X."TransId" AS "交易号 TransId", X."U_CWNum" AS "财务凭证号 U_CWNum", X."Line_ID" AS "B1 行号 Line_ID", J."RefDate" AS "过账日期", J."AcctCode" AS "AcctCode", A."AcctName" AS "科目名称",
                J."OcrCode" AS "成本中心", J."Project" AS "项目", J."VendorCode" AS "供应商", J."Debit" AS "借方", J."Credit" AS "贷方"
           FROM "MTC_CA_R_JDT" J LEFT JOIN "OACT" A ON A."AcctCode" = J."AcctCode"
+          LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE J."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE J."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE J."AcctCode" LIKE X."P"))
          ORDER BY J."TransCode", J."LineNo";
     ELSE
-        SELECT J."TransCode" AS "TransCode", MAX(IFNULL(T."TrnsCodDsc", J."TransName")) AS "凭证名称", COUNT(*) AS "分录行数",
+        SELECT :fc AS "FcCode", :rid AS "运行号", J."TransCode" AS "TransCode", MAX(IFNULL(T."TrnsCodDsc", J."TransName")) AS "凭证名称", COUNT(*) AS "分录行数",
                SUM(J."Debit") AS "借方", SUM(J."Credit") AS "贷方", CAST(SUM(J."Debit") - SUM(J."Credit") AS DECIMAL(19,2)) AS "借贷差",
                MAX(V."BatchNum") AS "凭单批号", IFNULL(MAX(V."B1State"), '未生成凭单') AS "B1 状态",
+               MAX(X."TransId") AS "交易号 TransId", MAX(X."Number") AS "凭证编号 Number", MAX(X."U_CWNum") AS "财务凭证号 U_CWNum",
                MAX(V."CreateUser") AS "生成人", MAX(V."CreateTime") AS "生成时间"
           FROM "MTC_CA_R_JDT" J
           LEFT JOIN "OTRC" T ON T."TrnsCode" = J."TransCode"
@@ -1070,6 +1142,7 @@ BEGIN
                        FROM (SELECT "TransCode", MAX("BatchNum") AS "BatchNum", MAX("CreateUser") AS "CreateUser", MAX("CreateTime") AS "CreateTime"
                                FROM "MTC_CA_JV" WHERE "FcCode" = :fc AND "RunId" = :rid AND "Status" = 'CREATED' AND "BatchNum" IS NOT NULL
                               GROUP BY "TransCode") G) V ON V."TransCode" = J."TransCode"
+          LEFT JOIN :jv X ON X."TransCode" = J."TransCode"
          WHERE J."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE J."TransCode" = X."V"))
            AND (:nAcct = 0 OR EXISTS (SELECT 1 FROM :lAcct X WHERE J."AcctCode" LIKE X."P"))
@@ -1581,7 +1654,7 @@ BEGIN
                        CASE WHEN :STYPE = '1' THEN "CumQ" END AS "CumQ", "PQ", "SQ", "AQ", "AA", "UP", "Note"
                   FROM :d)
          GROUP BY "Prod", "Mat", "FcCode", "OrderType", "OrderNum", "OrderEntry";
-    SELECT X."Prod" AS "产品", PM."ItemName" AS "产品名称", X."FcCode" AS "账期", X."OrderType" AS "订单单据", X."OrderNum" AS "订单号 Num",
+    SELECT X."Prod" AS "产品", PM."ItemName" AS "产品名称", X."FcCode" AS "账期", "MTC_CA_F_RPT_OTNAME"(X."OrderType") AS "订单单据", X."OrderNum" AS "订单号 Num",
            X."Mat" AS "材料", MM."ItemName" AS "材料名称", X."Cnt" AS "订单数", CAST(X."CumQ" AS DECIMAL(19,6)) AS "累计完工数",
            CAST(X."PQ" AS DECIMAL(19,6)) AS "订单计划用量", CAST(X."SQ" AS DECIMAL(19,6)) AS "按完工折算标准用量", CAST(X."AQ" AS DECIMAL(19,6)) AS "实际领用",
            CAST(X."AQ" - X."SQ" AS DECIMAL(19,6)) AS "差异·数量", CAST((X."AQ" - X."SQ") * 100 / NULLIF(X."SQ", 0) AS DECIMAL(19,2)) AS "差异·%",
@@ -1897,7 +1970,7 @@ BEGIN
           FROM :r R LEFT JOIN "OITM" M ON M."ItemCode" = R."KMat"
          ORDER BY CASE R."KMat" WHEN '#SUBFEE' THEN 1 WHEN '#ALLOC' THEN 2 ELSE 0 END, R."KMat";
     ELSEIF :STYPE = '3' THEN
-        SELECT R."KCat" AS "核算类别", R."KOT" AS "订单单据", R."OrderNum" AS "订单号 Num", R."KOE" AS "订单 Entry", R."KWt" AS "订单类型",
+        SELECT R."KCat" AS "核算类别", "MTC_CA_F_RPT_OTNAME"(R."KOT") AS "订单单据", R."OrderNum" AS "订单号 Num", R."KOE" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(R."KWt") AS "订单类型",
                R."KProd" AS "产品", M."ItemName" AS "产品名称", R."CardCode" AS "委外供应商", R."StatusAtEnd" AS "期末状态", R."ClosedInFc" AS "按关单处理",
                CAST(R."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(R."CumQ" AS DECIMAL(19,6)) AS "累计完工",
                CAST(R."CumQ" * 100 / NULLIF(R."PlannedQty", 0) AS DECIMAL(19,2)) AS "完工率 %",
@@ -1911,7 +1984,7 @@ BEGIN
           FROM :r R LEFT JOIN "OITM" M ON M."ItemCode" = R."KProd"
          ORDER BY R."KCat", R."KOT", R."KOE";
     ELSE
-        SELECT R."KCat" AS "核算类别", R."KWt" AS "订单类型", R."Cnt" AS "订单数",
+        SELECT R."KCat" AS "核算类别", "MTC_CA_F_RPT_WTNAME"(R."KWt") AS "订单类型", R."Cnt" AS "订单数",
                CAST(R."BMat" AS DECIMAL(19,2)) AS "期初在产品·材料", CAST(R."BLab" AS DECIMAL(19,2)) AS "期初在产品·人工",
                CAST(R."BMfg" AS DECIMAL(19,2)) AS "期初在产品·制造", CAST(R."BSub" AS DECIMAL(19,2)) AS "期初在产品·委外", CAST(R."B" AS DECIMAL(19,2)) AS "期初在产品·合计",
                CAST(R."Iss" AS DECIMAL(19,2)) AS "本期·领料", CAST(R."Alc" AS DECIMAL(19,2)) AS "本期·本级分摊",
@@ -1971,7 +2044,7 @@ BEGIN
           JOIN "MTC_CA_R_ORDER_MAT" X ON X."RunId" = O."RunId" AND X."OrderType" = O."OrderType" AND X."OrderEntry" = O."OrderEntry"
           LEFT JOIN :pl P ON P."RunId" = X."RunId" AND P."OrderType" = X."OrderType" AND P."OrderEntry" = X."OrderEntry" AND P."ItemCode" = X."ItemCode"
          WHERE (:nMat = 0 OR EXISTS (SELECT 1 FROM :lMat L WHERE X."ItemCode" LIKE L."P"));
-    SELECT D."FcCode" AS "账期", D."Cat" AS "核算类别", D."OrderType" AS "订单单据", D."OrderNum" AS "订单号 Num", D."OrderEntry" AS "订单 Entry", D."WorType" AS "订单类型",
+    SELECT D."FcCode" AS "账期", D."Cat" AS "核算类别", "MTC_CA_F_RPT_OTNAME"(D."OrderType") AS "订单单据", D."OrderNum" AS "订单号 Num", D."OrderEntry" AS "订单 Entry", "MTC_CA_F_RPT_WTNAME"(D."WorType") AS "订单类型",
            D."ItemCode" AS "产品", D."ItemName" AS "产品名称", D."Grp" AS "物料组", D."CardCode" AS "委外供应商", D."PostDate" AS "订单日期",
            D."StatusAtEnd" AS "期末状态", D."ClosedInFc" AS "按关单处理",
            CAST(D."PlannedQty" AS DECIMAL(19,6)) AS "计划数", CAST(D."CumQ" AS DECIMAL(19,6)) AS "累计完工",

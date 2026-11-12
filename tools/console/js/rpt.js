@@ -105,7 +105,7 @@ async function rptQuery(r, v){
   if (r.alias) res.columns = colAlias(res.columns, r.alias);   // R10 过程输出英文字段名，这里换成显示名（钻取、复制、导出都用显示名）
   return res;
 }
-// 双击汇总行：drill.set 的值 = 行的列名（= 开头精确匹配，@ 开头沿用当前参数，' 开头固定值），在抽屉里逐层打开
+// 双击汇总行：drill.set 的值 = 行的列名（行里没有该列时沿用当前参数；= 开头精确匹配，@ 开头沿用当前参数，' 开头固定值），在抽屉里逐层打开
 async function rptDrill(r, v, row){
   const dd = r.drill && r.drill[(v.STYPE ?? "") || "0"]; if (!dd) return;
   const to = rptDef(dd.to || r.id), nv = dd.to ? rptDefaults(to) : Object.assign({}, v);
@@ -114,7 +114,11 @@ async function rptDrill(r, v, row){
   for (const [k, c] of Object.entries(dd.set)) {
     if (c.startsWith("@")) nv[k] = v[c.slice(1)] ?? "";
     else if (c.startsWith("'")) nv[k] = c.slice(1);
-    else { const ex = c.startsWith("="), x = row[ex ? c.slice(1) : c]; nv[k] = x === null || x === undefined || x === "" ? "" : (ex ? "=" : "") + String(x); }
+    else { const ex = c.startsWith("="), x = row[ex ? c.slice(1) : c]; if (x === undefined) continue;   // 行里没有这一列（如走势页只传产品）时沿用当前参数
+      nv[k] = x === null || x === "" ? "" : (ex ? "=" : "") + String(x);
+      // 报表显示中文名（订单类型“生产计划单”）而参数是下拉代码时，按下拉文字找回代码（用户 2026-11-11）
+      const pd = to.params.find(p => p.name === k);
+      if (pd && pd.opts && nv[k] && !pd.opts.some(o => o[0] === nv[k])) { const m = pd.opts.find(o => o[1] === nv[k] || o[1].endsWith(" " + nv[k])); if (m) nv[k] = m[0]; } }
   }
   const el = drawer(`R${to.id} ${to.name}`);
   el.innerHTML = `<p class="hint">${esc(rptCond(to, nv))}</p><div class="empty">加载中…</div>`;

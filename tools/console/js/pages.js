@@ -2,7 +2,7 @@
 // index.html 按顺序加载 js/ 下的脚本，共用全局作用域；加载时立即执行的代码只能用到本文件和前面文件里的名字。
 "use strict";
 // 结果表（物料、订单、比对、凭证）只保留最近一次成功运行的明细
-const ORDLOCAL = {LocalMfg:"本期分摊到这张订单的制造费用，不含子件带入", LocalLab:"本期分摊到这张订单的人工，不含子件带入", LocalSub:"这张订单自己的委外加工费本期结转，不含子件带入"};
+const ORDLOCAL = {LocalMat:"领用的材料和半成品全额（半成品里含的料工费都算材料）= 完工成本合计 − 本级制造 − 人工 − 委外，本级四项合计 = 完工成本合计", LocalMfg:"本期分摊到这张订单的制造费用，不含子件带入", LocalLab:"本期分摊到这张订单的人工，不含子件带入", LocalSub:"这张订单自己的委外加工费本期结转，不含子件带入"};
 const SNAPST = new Set(["BLOCKED", "CHECKED"]);   // 这两种运行没有结果表，交易明细取计算前快照（用户 2026-11-04）
 const latestNote = () => {
   const snap = SNAPST.has(SEL.Status) && TAB !== "ledger" ? "当月库存交易看“收发存明细”页（计算前快照）。" : "";
@@ -189,7 +189,7 @@ async function tabBody(pane, quiet){
       searchList(pane.querySelector("#lst"), "invLedger", {runId:id}, "收发存明细", {require:true, hide:["Seq"], wrap:["PriceSrc"], rowCls: x => x[2] === 0 ? "sub" : x[2] === 2 ? "tot" : "", empty:"没有期初、收发或期末"}, "物料编码开头或物料组");
     } else if (TAB === "orders") {
       pane.innerHTML = latestNote() + `<p class="hint">点击一张订单查看成本构成、材料结转、费用分摊、委外加工费来源和单据行。</p><div id="lst"></div>`;
-      searchList(pane.querySelector("#lst"), "orders", {runId:id}, "订单成本", {fmt:{WorType: wt}, groups:{LocalMfg:["本级", "制造"], LocalLab:["本级", "人工"], LocalSub:["本级", "委外"]}, tips:ORDLOCAL, total:"ordersTotal", onRow: o => orderDetail(id, o)}, "物料编码开头或订单号");
+      searchList(pane.querySelector("#lst"), "orders", {runId:id}, "订单成本", {fmt:{WorType: wt}, groups:{LocalMat:["本级", "材料"], LocalMfg:["本级", "制造"], LocalLab:["本级", "人工"], LocalSub:["本级", "委外"]}, tips:ORDLOCAL, total:"ordersTotal", onRow: o => orderDetail(id, o)}, "物料编码开头或订单号");
     } else if (TAB === "wip") {
       const r = await q("wipSummary", {runId:id});
       pane.innerHTML = latestNote() + `<p class="hint">期末在产品和本期关单差异（四项要素合计 = 订单 × 材料汇总）。点击订单查看明细。</p>`

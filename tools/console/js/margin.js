@@ -178,11 +178,13 @@ function mgToggle(code, on){
   mgPut(mgSK("pick"), [...MG.pick.entries()]);
   mgCharts();
 }
-// 行内迷你折线（用户 2026-11-06）：跟“月份列显示”的指标走，每行用自己的刻度只看形状；末月标点，没销售的月份断开
+// 行内迷你折线（用户 2026-11-06）：跟“月份列显示”的指标走，每行用自己的刻度（幅度有下限，见下）；末月标点，没销售的月份断开
 function mgSpark(vals, months, ind){
   const W = 92, H = 20, P = 4, n = vals.length, got = vals.filter(v => v !== null);
   if (!got.length) return "";
-  const lo = Math.min(...got), hi = Math.max(...got), X = i => P + i * (W - P * 2) / (n - 1), Y = v => hi === lo ? H / 2 : H - P - (v - lo) / (hi - lo) * (H - P * 2);
+  // 纵轴不按本行最小 ~ 最大撑满：幅度至少取数值的 20%（百分比指标至少 10 个百分点），居中画，小变动画出来就是平缓的线
+  const mn = Math.min(...got), mx = Math.max(...got), span = Math.max(mx - mn, /%/.test(ind) ? 10 : Math.max(Math.abs(mn), Math.abs(mx)) * 0.2),
+    lo = (mn + mx) / 2 - span / 2, X = i => P + i * (W - P * 2) / (n - 1), Y = v => span ? H - P - (v - lo) / span * (H - P * 2) : H / 2;
   let d = "", h = "", last = -1;
   vals.forEach((v, i) => {
     if (v === null) return;
@@ -231,10 +233,10 @@ function mgTable(d){
   const box = $("#mgTbl"), byCode = new Map(d.items.map(x => [x.code, x])), fixFmt = {}, fixTip = {};
   for (const [t, k] of fix) {
     fixFmt[t] = (v, x) => { const it = byCode.get(x[0]); return mgSpark(d.months.map(f => mgVal(it.m[f], k)), d.months, k); };
-    fixTip[t] = `${k}，近 ${d.n} 个月；固定显示，不随“显示列”变化；每行用自己的刻度，只看形状`;
+    fixTip[t] = `${k}，近 ${d.n} 个月；固定显示，不随“显示列”变化；每行用自己的刻度，波动不到数值的 20%（百分比指标 10 个百分点）时按这个幅度画，线平表示变化小`;
   }
   mgTipHide();
-  box.innerHTML = table(r, {freeze:3, onRow:true, hideDefault:["物料组名称"], wrap:["提示"], noExport:[spk, ...fix.map(([t]) => t)], tips:{[spk]:`${ind}，近 ${d.n} 个月；每行用自己的刻度，只看形状`, ...fixTip}, empty:"没有符合条件的数据",
+  box.innerHTML = table(r, {freeze:3, onRow:true, hideDefault:["物料组名称"], wrap:["提示"], noExport:[spk, ...fix.map(([t]) => t)], tips:{[spk]:`${ind}，近 ${d.n} 个月；每行用自己的刻度，波动不到数值的 20%（百分比指标 10 个百分点）时按这个幅度画，线平表示变化小`, ...fixTip}, empty:"没有符合条件的数据",
     fmt:{...fixFmt, [c.code]:v => `<input type="checkbox" class="mgck" data-mg="${esc(v)}"${MG.pick.has(v) ? " checked" : ""} title="加入 / 去掉对比图" aria-label="对比 ${esc(v)}"> ${esc(v)}`,
       [spk]:(v, x) => mgSpark(x.slice(mi, mi + d.n), d.months, ind)}});
   bindRows(box, r, row => mgDetail(row[c.code]));

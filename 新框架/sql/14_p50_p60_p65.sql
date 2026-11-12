@@ -132,6 +132,7 @@ BEGIN
     DECLARE boot NVARCHAR(10); DECLARE prev NVARCHAR(10);
     DECLARE tailMax DECIMAL(19,6); DECLARE tailWarn DECIMAL(19,6); DECLARE pjPct DECIMAL(19,6); DECLARE pjAmt DECIMAL(19,6);
     DECLARE fdPct DECIMAL(19,6); DECLARE fdAmt DECIMAL(19,6); DECLARE fdMon INT; DECLARE fdN INT; DECLARE fdMsg NVARCHAR(1000);
+    DECLARE idPct DECIMAL(19,6); DECLARE idAmt DECIMAL(19,6);
     CALL "MTC_CA_P_RUN_CTX"(:RunId, fc, rt, scen, d0, d1);
     boot := "MTC_CA_F_PARAM"('BOOTSTRAP_FC', :fc);
     tailMax := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('TAIL_MAX', :fc), '0.02'), 19, 6);
@@ -141,6 +142,8 @@ BEGIN
     fdPct := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('FEE_DEV_PCT', :fc), '30'), 19, 6);
     fdAmt := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('FEE_DEV_AMT', :fc), '50000'), 19, 6);
     fdMon := TO_INTEGER(IFNULL("MTC_CA_F_PARAM"('FEE_BASE_MONTHS', :fc), '6'));
+    idPct := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('ISSUE_DEV_PCT', :fc), '10'), 19, 6);
+    idAmt := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('ISSUE_DEV_AMT', :fc), '500'), 19, 6);
     SELECT MAX("Code") INTO prev FROM "OFPR" WHERE "Code" < :fc;
 
     -- POST-01 期末数量 = B1（计价仓库 OIVL 截至期末）
@@ -246,6 +249,79 @@ BEGIN
             JOIN "MTC_CA_R_ITEM" I ON I."RunId" = :RunId AND I."ItemCode" = L."ItemCode"
            WHERE I."PriceSrc" IN ('WAVG', 'OPEN') AND I."PMat" + I."PMfg" + I."PLab" + I."PSub" = 0;
     CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-17', :t17, NULL);
+
+    -- POST-18 领料完整性（用户 2026-11-11，只警告）：订单本期领料（R_ORDER_MAT）是从挂订单的领料 / 退料行汇总的，这里查掉出去的行：
+    --   ① 按订单核对 收发存明细的领料 / 退料行合计 = 订单本期领料（不含加工费）；订单不在本期订单清单时这些行的金额进不了在产品
+    --   ② 生产领料（B03）、完工入库（B01）类业务没挂订单的行：按普通出入库计价，不进任何订单
+    iss = SELECT "OrderType", "OrderEntry", -SUM("Amount") AS "Amt", COUNT(*) AS "Cnt"
+            FROM "MTC_CA_R_LINE" WHERE "RunId" = :RunId AND "Cat" IN ('ISSUE', 'RTN304') GROUP BY "OrderType", "OrderEntry";
+    omat = SELECT "OrderType", "OrderEntry", SUM("IssMat" + "IssMfg" + "IssLab" + "IssSub") AS "Amt"
+             FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE' GROUP BY "OrderType", "OrderEntry";
+    t18 = SELECT "MTC_CA_F_DOCKEY"(K."OrderType", K."OrderEntry") AS "KeyCode",
+                 CASE WHEN O."OrderEntry" IS NULL
+                      THEN '订单不在本期订单清单：领料 / 退料 ' || TO_NVARCHAR(IFNULL(L."Cnt", 0)) || ' 行，金额 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0), 2)) || ' 没进在产品'
+                      ELSE '收发存明细领料 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0), 2)) || '，订单本期领料 ' || TO_NVARCHAR(ROUND(IFNULL(M."Amt", 0), 2))
+                           || '，差 ' || TO_NVARCHAR(ROUND(IFNULL(L."Amt", 0) - IFNULL(M."Amt", 0), 2)) END AS "Info"
+            FROM (SELECT "OrderType", "OrderEntry" FROM :iss UNION SELECT "OrderType", "OrderEntry" FROM :omat) K
+            LEFT JOIN :iss L ON L."OrderType" = K."OrderType" AND L."OrderEntry" = K."OrderEntry"
+            LEFT JOIN :omat M ON M."OrderType" = K."OrderType" AND M."OrderEntry" = K."OrderEntry"
+            LEFT JOIN "MTC_CA_R_ORDER" O ON O."RunId" = :RunId AND O."OrderType" = K."OrderType" AND O."OrderEntry" = K."OrderEntry"
+           WHERE O."OrderEntry" IS NULL OR ABS(IFNULL(L."Amt", 0) - IFNULL(M."Amt", 0)) > 0.05
+          UNION ALL
+          SELECT "MTC_CA_F_DOCKEY"(S."ObjType", S."DocEntry") || '-LineNum ' || IFNULL(TO_NVARCHAR(S."LineNum"), ''),
+                 CASE WHEN S."BusiClass" = 'B03' THEN '生产领料类' ELSE '完工入库类' END || '业务（' || IFNULL(S."BusiType", '') || '）没挂订单：'
+                 || L."ItemCode" || ' 数量 ' || TO_NVARCHAR(L."Qty") || '，金额 ' || TO_NVARCHAR(ROUND(L."Amount", 2)) || '，按普通出入库计价，不进任何订单'
+            FROM "MTC_CA_R_LINE" L JOIN "MTC_CA_S_LINE" S ON S."RunId" = L."RunId" AND S."LineId" = L."LineId"
+           WHERE L."RunId" = :RunId AND S."BusiClass" IN ('B01', 'B03') AND S."OrderEntry" IS NULL AND L."Cat" <> 'NOCOST';
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-18', :t18, NULL);
+
+    -- POST-19 完工没有材料（用户 2026-11-11，只警告）：本期有完工入库，本级材料 ≤ 0（本级材料 = 完工成本 − 本级分摊制造 − 人工 − 加工费结转，同 R02）：
+    --   没领料就入库、领料挂错订单，或退料多于领料。“累计完工达计划仍有在产品”不用另查：这时结转比例为 1（P30 Ratio），在产品必然为 0
+    t19 = SELECT "MTC_CA_F_DOCKEY"(O."OrderType", O."OrderEntry") AS "KeyCode",
+                 O."ItemCode" || ' 本期完工 ' || TO_NVARCHAR(O."RecvQty") || '，本级材料 '
+                 || TO_NVARCHAR(ROUND(O."CostAmt" - O."AllocMfg" - O."AllocLab" - IFNULL(F."CarSub", 0), 2))
+                 || CASE WHEN M."OrderEntry" IS NULL THEN '，订单没有任何领料' ELSE '' END AS "Info"
+            FROM "MTC_CA_R_ORDER" O
+            LEFT JOIN "MTC_CA_R_ORDER_MAT" F ON F."RunId" = O."RunId" AND F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" AND F."ItemCode" = '#SUBFEE'
+            LEFT JOIN (SELECT DISTINCT "OrderType", "OrderEntry" FROM "MTC_CA_R_ORDER_MAT"
+                        WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE' AND "OpenIssQty" + "IssQty" <> 0) M
+              ON M."OrderType" = O."OrderType" AND M."OrderEntry" = O."OrderEntry"
+           WHERE O."RunId" = :RunId AND O."RecvQty" > 0
+             AND O."CostAmt" - O."AllocMfg" - O."AllocLab" - IFNULL(F."CarSub", 0) <= 0.005;
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-19', :t19, NULL);
+
+    -- POST-20 单耗偏离（用户 2026-11-11，只警告）：订单 × 材料，累计净领料数量 与 按计划应领 = 订单用料计划数（S_ORDER_LINE.PlannedQty，WOR1 / @MTC_WOR1）÷ 订单计划数 × 累计完工数 比较，
+    --   口径同 P30 结转比例的单位计划用量；用订单自己的用料计划而不是当前 BOM，返工单、委外单也能比。
+    --   少领：本期有完工或本期关单的订单都比；超领、计划外领料（订单用料里没有或计划为 0 的材料）只比已完工的（本期关单，或累计完工 ≥ 计划数），
+    --   没完工前多领的料还在产线上。影响金额 = 偏离数量 × 物料本期单价；偏离比例 > ISSUE_DEV_PCT 且影响金额 ≥ ISSUE_DEV_AMT 才报。
+    --   不含加工费；订单计划数 ≤ 0、计划用量为负（联产品 / 副产品）的不比。
+    pl = SELECT "OrderType", "OrderEntry", "ItemCode", SUM("PlannedQty") AS "Qty"
+           FROM "MTC_CA_S_ORDER_LINE" WHERE "RunId" = :RunId GROUP BY "OrderType", "OrderEntry", "ItemCode";
+    dev = SELECT O."OrderType", O."OrderEntry", O."ItemCode" AS "Prod", K."ItemCode",
+                 CASE WHEN O."ClosedInFc" = 'Y' OR O."PrevRecvQty" + O."RecvQty" >= O."PlannedQty" - 0.000001 THEN 'Y' ELSE 'N' END AS "Done",
+                 IFNULL(M."OpenIssQty" + M."IssQty", 0) AS "Act",
+                 IFNULL((O."PrevRecvQty" + O."RecvQty") * P."Qty" / O."PlannedQty", 0) AS "Need",
+                 IFNULL(I."PMat" + I."PMfg" + I."PLab" + I."PSub", 0) AS "Price"
+            FROM "MTC_CA_R_ORDER" O
+            JOIN (SELECT "OrderType", "OrderEntry", "ItemCode" FROM :pl
+                  UNION SELECT "OrderType", "OrderEntry", "ItemCode" FROM "MTC_CA_R_ORDER_MAT" WHERE "RunId" = :RunId AND "ItemCode" <> '#SUBFEE') K
+              ON K."OrderType" = O."OrderType" AND K."OrderEntry" = O."OrderEntry"
+            LEFT JOIN :pl P ON P."OrderType" = K."OrderType" AND P."OrderEntry" = K."OrderEntry" AND P."ItemCode" = K."ItemCode"
+            LEFT JOIN "MTC_CA_R_ORDER_MAT" M ON M."RunId" = O."RunId" AND M."OrderType" = K."OrderType" AND M."OrderEntry" = K."OrderEntry" AND M."ItemCode" = K."ItemCode"
+            LEFT JOIN "MTC_CA_R_ITEM" I ON I."RunId" = O."RunId" AND I."ItemCode" = K."ItemCode"
+           WHERE O."RunId" = :RunId AND IFNULL(O."PlannedQty", 0) > 0 AND IFNULL(P."Qty", 0) >= 0
+             AND (O."RecvQty" > 0 OR (O."ClosedInFc" = 'Y' AND O."PrevRecvQty" + O."RecvQty" > 0));
+    t20 = SELECT "MTC_CA_F_DOCKEY"("OrderType", "OrderEntry") || '-' || "ItemCode" AS "KeyCode",
+                 CASE WHEN "Need" = 0 THEN '计划外领料（订单用料里没有，替代料或多领）' WHEN "Act" < "Need" THEN '少领' ELSE '超领' END
+                 || '：产品 ' || "Prod" || '，累计领料 ' || TO_NVARCHAR(ROUND("Act", 6)) || '，按计划应领 ' || TO_NVARCHAR(ROUND("Need", 6))
+                 || CASE WHEN "Need" <> 0 THEN '，偏离 ' || TO_NVARCHAR(ROUND(("Act" - "Need") * 100 / "Need", 1)) || '%' ELSE '' END
+                 || '，影响约 ' || TO_NVARCHAR(ROUND(ABS("Act" - "Need") * "Price", 2)) AS "Info"
+            FROM :dev
+           WHERE ABS("Act" - "Need") * "Price" >= :idAmt
+             AND (("Need" = 0 AND "Done" = 'Y' AND "Act" > 0)
+               OR ("Need" > 0 AND "Act" < "Need" AND ("Need" - "Act") * 100 / "Need" > :idPct)
+               OR ("Need" > 0 AND "Done" = 'Y' AND "Act" > "Need" AND ("Act" - "Need") * 100 / "Need" > :idPct));
+    CALL "MTC_CA_P_CHECK_PUT"(:RunId, 'POST-20', :t20, NULL);
 
     -- POST-14 物料成本异常（用户 2026-10-14）：单价、数量、金额异常，含小尾差和价格大幅波动；原为只警告，2026-10-14 起计算后校验不通过一律阻断。
     -- 单价 P = 本期加权单价四项之和；期初单价 = 期初金额 ÷ 期初数量。阈值：TAIL_MAX（零库存尾差）、TAIL_WARN（挤入出库行的尾差）、PRICE_JUMP_PCT（%）、PRICE_JUMP_AMT（影响金额下限）

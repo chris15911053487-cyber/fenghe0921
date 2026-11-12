@@ -57,7 +57,8 @@ BEGIN
     -- 计算后校验（POST）不通过一律阻断，没有警告（用户 2026-10-14）；
     -- 例外：参数 POST_WARN_IDS 中的检查按 C_CHECK.IsBlock（POST-15 PUR 逐单据勾稽先只警告，用户 2026-10-30）
     -- POST-16 费用波动、POST-17 加权价入库 0 成本固定只警告，不靠参数，B1 里的 POST_WARN_IDS 不用改（用户 2026-11-06）
-    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
+    -- POST-18 领料完整性、POST-19 完工没有材料、POST-20 单耗偏离同样固定只警告（用户 2026-11-11）
+    IF :stage = 'POST' AND LOCATE(IFNULL("MTC_CA_F_PARAM"('POST_WARN_IDS', :fc), ',POST-15,') || ',POST-16,,POST-17,,POST-18,,POST-19,,POST-20,', ',' || :CheckId || ',') = 0 THEN blk := 'Y'; END IF;
     SELECT COUNT(*) INTO cnt FROM :dtl;
 
     INSERT INTO "MTC_CA_R_CHECK" ("FcCode", "RunType", "Scenario", "RunId", "CheckId", "Stage", "Result", "IssueCnt", "IsBlock", "Msg", "CheckTime")

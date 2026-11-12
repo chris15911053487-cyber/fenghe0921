@@ -254,3 +254,11 @@ PRE-29 已生成凭单账期有未进结果的重估单（只警告）：日期�
 ### 2026-11-07 R10 凭证代码、科目编码输出英文字段名（用户）
 
 `MTC_CA_RPT_10_JV` 三种显示方式里这两列改为 `TransCode`、`AcctCode`，其他列不变；执行台按 `rpt_defs.json` 的 `alias` 显示“凭证代码”“科目编码”。已部署的库执行 `patch_20261107_r10cols.sql`，执行台同时更新（服务器模式重新 `pack_server.py` 打包）；参数没变，B1 里已登记的 R10 不用重新登记。未编译。
+
+### 2026-11-11 POST-18 领料完整性、POST-19 完工没有材料、POST-20 单耗偏离（用户）
+
+生产入库的材料、收发存明细里的领料要有可比对的校验。三项固定只警告。已部署的库依次执行 `patch_20261111_issuechk.sql`、`08_precheck.sql`、`14_p50_p60_p65.sql`，再 `CALL "MTC_CA_P_META_SYNC"()`；新参数 `ISSUE_DEV_PCT`、`ISSUE_DEV_AMT` 部署后先用 `sl_import_costcfg.py --param` 补到 B1，否则 PRE-28 阻断。离线写的，未编译。
+
+### 2026-11-11 成本报表 R02 / R10 改列，订单单据、订单类型显示中文（用户）
+
+R02 加入库单价、本级分摊·材料、按产品显示的账期列；R10 加运行号、分录号、B1 交易号 TransId / 凭证编号 Number / B1 行号 Line_ID；各报表的订单单据、订单类型经 `MTC_CA_F_RPT_OTNAME` / `MTC_CA_F_RPT_WTNAME` 显示中文。已部署的库重新执行整个 `21_reports.sql`（`python3 新框架/tools/hana_exec.py -f 新框架/sql/21_reports.sql`，含 `patch_20261111_r02rcptprice.sql`、`patch_20261111_r10runline.sql` 的内容）；B1 里已登记的报表参数没变，不用重新登记。执行台同时更新。离线写的，未编译。

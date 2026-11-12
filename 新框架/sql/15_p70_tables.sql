@@ -201,6 +201,11 @@ UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "De
 @@
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('GOODS_TAIL_MAX', 'PARAM', '尾差与校验', 315, '发出商品尾差结转上限', 'DEC', NULL, '元（含）：140601 本期合计在 ± 本值以内的转 640101（JZ04），如 1；超过的 POST-10 报出') WITH PRIMARY KEY
 @@
+-- 费用固定借方红字（用户 2026-11-08）：YF01 / IO01 退回、盘盈时不把费用记到贷方，同旧 0801
+UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JDT_RED_DEBIT_TRANSCODES', '0000-00', '9999-99', ',YF01,IO01,', 'LIST', '费用固定记借方的凭证代码：费用科目（行上科目）固定借方、存货科目固定贷方，退回 / 盘盈使净额反向时用红字（负数），不换到另一方；同旧 0801（用户 2026-11-08）') WITH PRIMARY KEY
+@@
+UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JDT_RED_DEBIT_TRANSCODES', 'PARAM', '凭证与对账', 425, '费用固定借方（红字）的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 YF01,IO01；列出的凭证费用科目固定借方、存货科目固定贷方，反向用负数') WITH PRIMARY KEY
+@@
 UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('WW_HIST_OCR', '0000-00', '9999-99', 'P016', 'STR', '历史委外差异转出（JZ05）借方的成本中心，按它归费用池（用户 2026-11-04）') WITH PRIMARY KEY
 @@
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('WW_HIST_OCR', 'PARAM', '凭证与对账', 445, '历史委外转出成本中心', 'STR', NULL, '成本中心代码，如 P016') WITH PRIMARY KEY

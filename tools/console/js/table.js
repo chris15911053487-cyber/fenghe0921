@@ -24,7 +24,7 @@ const saveColw = () => { try { localStorage.setItem("cc.colw", JSON.stringify(CO
 const NOSUM = /^Snap(Beg|Bal)Qty$|Price|Ratio|^Rt|Unit|Pct|Rate|Level|^Sec$|Iter|Delta|Cnt$|^Lines$|Days?$|单价|比例|占比|%|层级|天数|月数|单耗|费率|每件|每工时|单位成本|单位售价|单位工时|因素|行号|账期数|运行号|批号|本期值|上期值/;
 const NOFMT = ["StepNo","SeqNo","Iter","RunId","iLevel","LineNo","OrderEntry","OrderNum","DocEntry","DocNum","LineNum","ObjType","TransId","LineId","Line_ID","SrcDoc","RcptNum","JdtNum","DocNo","BaseRef"];
 // 编号类列（不加千分位、不合计）：英文列名按 NOFMT，成本报表的中文列名按“单号 Num / 订单 Entry / 行号 / 运行号 / 层级”等（用户 2026-10-30）
-const noFmt = c => NOFMT.includes(c) || /Num$|Entry$|行号|运行号|批号|^层级$|^账期数$/.test(c);
+const noFmt = c => NOFMT.includes(c) || /Num$|Entry$|TransId$|Number$|Line_ID$|行号|分录号|运行号|批号|^层级$|^账期数$/.test(c);
 function table(r, opt = {}){
   if (!r.rows.length) return `<div class="empty">${esc(opt.empty || "没有数据")}</div>`;
   const id = "t" + (++TBLN), key = TAB + "|" + r.columns.join(",");
