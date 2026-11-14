@@ -5,7 +5,7 @@
 -- 单据行定价类别 Cat（R_LINE.Cat）：
 --   FIX     采购收货 / 退货、应付发票 / 贷项差额、库存重估 I11、委外发票差异 APDIF：取 S_LINE.SrcAmt（规则 FIX-01；APDIF 记委外要素）
 --   NOCOST  U_CalType=InvntCost 的重估：金额计入期末，不参与加权单价（RVL-01）
---   SRT     有原交货的销售退货：原交货在以前账期的，按原交货单位成本（SRT-01）；原交货在本期的改为 WAVG（与原交货同价）
+--   SRT     有原交货的销售退货：原交货在以前账期的，按原交货单位成本（SRT-01）；BOOTSTRAP_FC 及以前取历史回填运行 H（料工费拆分），没回填才取旧 0302 全部记材料；原交货在本期的改为 WAVG（与原交货同价）
 --   SRTQ    没有原交货的销售退货：期初维护价（SRT-01）；没有维护价的改为 WAVG（SRT-03，PRE-04 警告）
 --   CNL     交货 / 退货的取消单：原单为固定价的按原单单位成本反向；否则 WAVG（CNL-01）
 --           原单在本期按加权价的，与原单同价相抵，正常；本期找不到原单的才由 POST-05 报出
@@ -258,7 +258,8 @@ BEGIN
      WHERE T0."RunId" = :RunId AND T0."Cat" = 'SRTQ'
        AND NOT EXISTS (SELECT 1 FROM "MTC_CA_S_QCPRICE" Q WHERE Q."RunId" = T0."RunId" AND Q."ItemCode" = T0."ItemCode");
 
-    -- 3. 销售退货配对：原交货在本期 → WAVG；在以前账期 → 新框架当期结果，2026-08 及以前取旧 0302；都没有 → WAVG 并标注
+    -- 3. 销售退货配对：原交货在本期 → WAVG；在以前账期 → 新框架当期结果（BOOTSTRAP_FC 及以前取历史回填运行 H，料工费按旧完工比例拆分，
+    --    同成本报表取数规则，用户 2026-11-13）；都没有 → 旧 0302（全部记材料）；再没有 → WAVG 并标注
     srt = SELECT T0."LineId", S."BaseEntry", S."BaseLine"
             FROM "MTC_CA_R_LINE" T0
             JOIN "MTC_CA_S_LINE" S ON S."RunId" = T0."RunId" AND S."LineId" = T0."LineId"
@@ -268,16 +269,23 @@ BEGIN
              JOIN "MTC_CA_S_LINE" O ON O."RunId" = :RunId AND O."ObjType" = '15'
                                    AND TO_NVARCHAR(O."DocEntry") = R."BaseEntry" AND TO_NVARCHAR(O."LineNum") = R."BaseLine"
             GROUP BY R."LineId";
-    prevNew = SELECT R."LineId", S."FcCode",
+    -- 可取的以前运行：BOOTSTRAP_FC 以后的正式运行 F；BOOTSTRAP_FC 及以前每期最近一次成功的历史运行 H
+    prevRun = SELECT "RunId", 'F' AS "RunType" FROM "MTC_CA_RUN"
+               WHERE "Status" = 'OK' AND "RunType" = 'F' AND "FcCode" < :fc AND "FcCode" > IFNULL(:boot, '')
+              UNION ALL
+              SELECT MAX("RunId"), 'H' FROM "MTC_CA_RUN"
+               WHERE "Status" = 'OK' AND "RunType" = 'H' AND "Scenario" = 'LEGACY' AND "FcCode" < :fc AND "FcCode" <= :boot
+               GROUP BY "FcCode";
+    prevNew = SELECT R."LineId", S."FcCode", U."RunType",
                      SUM(L."MatAmt") / NULLIF(SUM(L."Qty"), 0) AS "UMat", SUM(L."MfgAmt") / NULLIF(SUM(L."Qty"), 0) AS "UMfg",
                      SUM(L."LabAmt") / NULLIF(SUM(L."Qty"), 0) AS "ULab", SUM(L."SubAmt") / NULLIF(SUM(L."Qty"), 0) AS "USub"
                 FROM :srt R
                 JOIN "MTC_CA_S_LINE" S ON S."ObjType" = '15' AND TO_NVARCHAR(S."DocEntry") = R."BaseEntry"
                                       AND TO_NVARCHAR(S."LineNum") = R."BaseLine" AND S."FcCode" < :fc
-                JOIN "MTC_CA_RUN" U ON U."RunId" = S."RunId" AND U."Status" = 'OK' AND U."RunType" = 'F'
+                JOIN :prevRun U ON U."RunId" = S."RunId"
                 JOIN "MTC_CA_R_LINE" L ON L."RunId" = S."RunId" AND L."LineId" = S."LineId"
                WHERE R."LineId" NOT IN (SELECT "LineId" FROM :same)
-               GROUP BY R."LineId", S."FcCode";
+               GROUP BY R."LineId", S."FcCode", U."RunType";
     prevOld = SELECT R."LineId", MAX(O."FcCode") AS "FcCode",
                      SUM(O."Amount") / NULLIF(SUM(O."Quantity"), 0) AS "UMat"
                 FROM :srt R
@@ -294,7 +302,8 @@ BEGIN
       FROM :same
     UNION ALL
     SELECT :fc, :rt, :scen, :RunId, P."LineId", 'SRT', NULL, P."FcCode", 'MTC_CA_R_LINE', P."UMat", P."UMfg", P."ULab", P."USub",
-           '原交货在 ' || P."FcCode" || '，取新框架当期成本'
+           '原交货在 ' || P."FcCode" || CASE WHEN P."RunType" = 'H' THEN '，取历史回填运行成本（料工费按旧框架完工比例拆分）'
+                                             ELSE '，取新框架当期成本' END
       FROM (SELECT X.*, ROW_NUMBER() OVER (PARTITION BY X."LineId" ORDER BY X."FcCode" DESC) AS "Rn" FROM :prevNew X) P
      WHERE P."Rn" = 1
     UNION ALL

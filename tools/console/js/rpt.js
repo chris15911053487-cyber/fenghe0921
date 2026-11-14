@@ -5,6 +5,8 @@
 "use strict";
 const RPT_GRPS = ["核算结果", "核对", "管理分析"];
 const rptDef = id => RPTDEFS.find(r => r.id === id);
+// R22 / R23 已有左侧独立菜单（#costtrend / #margin），不再出现在“成本报表”页的报表下拉里（用户 2026-11-11）；定义仍保留给那两页用
+const RPT_HIDE = ["22", "23"];
 let RPT_LISTS = null;
 function rptSaved(id){ try { return JSON.parse(localStorage.getItem("cc.rpt." + id) || "null"); } catch (e) { return null; } }
 function rptSave(id, v){ try { localStorage.setItem("cc.rpt." + id, JSON.stringify(v)); localStorage.setItem("cc.rpt.cur", id); } catch (e) {} }
@@ -139,11 +141,11 @@ function rptB1(r){
   };
 }
 async function renderRpt(pane){
-  let cur = RPT_CUR; if (!cur || !rptDef(cur)) { try { cur = localStorage.getItem("cc.rpt.cur"); } catch (e) {} }
-  if (!cur || !rptDef(cur)) cur = "03";
+  let cur = RPT_CUR; if (!cur || !rptDef(cur) || RPT_HIDE.includes(cur)) { try { cur = localStorage.getItem("cc.rpt.cur"); } catch (e) {} }
+  if (!cur || !rptDef(cur) || RPT_HIDE.includes(cur)) cur = "03";
   RPT_CUR = cur; syncUrl(false);
   const r = rptDef(cur), v = Object.assign(rptDefaults(r), rptSaved(cur) || {});
-  const opts = RPT_GRPS.map(g => `<optgroup label="${esc(g)}">${RPTDEFS.filter(x => x.grp === g).map(x => `<option value="${x.id}"${x.id === cur ? " selected" : ""}>R${x.id} ${esc(x.name)}</option>`).join("")}</optgroup>`).join("");
+  const opts = RPT_GRPS.filter(g => RPTDEFS.some(x => x.grp === g && !RPT_HIDE.includes(x.id))).map(g => `<optgroup label="${esc(g)}">${RPTDEFS.filter(x => x.grp === g && !RPT_HIDE.includes(x.id)).map(x => `<option value="${x.id}"${x.id === cur ? " selected" : ""}>R${x.id} ${esc(x.name)}</option>`).join("")}</optgroup>`).join("");
   pane.innerHTML = `<div class="bar"><select id="rptSel" style="max-width:100%">${opts}</select><span class="sp"></span>
       <button class="btn" id="rptB1" title="复制这张报表的 B1 查询管理器语句">在 SAP 中打开</button></div>`
     + note(esc(r.desc) + `<br>这些报表是 B1 端存储过程（${esc(r.proc)}），B1 查询管理器和这里调的是同一个过程，口径只有一套；取数运行：账期已生成凭单取凭单所用运行，否则取最近一次成功正式运行（与顶栏所选的运行无关，见 R00）。代码类条件按开头匹配，多个用逗号，前面加 = 精确匹配。`, "rpt")

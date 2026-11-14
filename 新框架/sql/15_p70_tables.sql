@@ -1,6 +1,7 @@
 -- =====================================================================
 -- 新成本框架 第 3 期：凭证、发出商品、应付暂估的结果表与配置（设计稿 3.5、4.5、4.6，清单 S12、S15）
--- 凭证先逐条来源写 R_JDT_SRC（金额带符号：正 = 借，负 = 贷），再按 凭证代码 × 科目 × 成本中心 × 项目 汇总成 R_JDT。
+-- 凭证先逐条来源写 R_JDT_SRC（金额带符号：正 = 借方效果，负 = 贷方效果；记在哪一方看 Side），再按 凭证代码 × 方向 × 科目 × 成本中心 × 项目 × 供应商
+-- 汇总成 R_JDT。方向由每条规则固定（同旧 0801），金额为负时在原方向记红字，不换方向（用户 2026-11-11）。
 -- 新框架只生成凭证，不过账；过账仍在库外完成（与旧 0801 相同）。
 -- =====================================================================
 CREATE COLUMN TABLE "MTC_CA_R_JDT_SRC" (
@@ -15,6 +16,7 @@ CREATE COLUMN TABLE "MTC_CA_R_JDT_SRC" (
     "SrcKey"     NVARCHAR(100),
     "Note"       NVARCHAR(200),
     "VendorCode" NVARCHAR(50),                  -- 220202 应付暂估行的供应商（写入 JDT1.U_VendorCode，PUR1–PUR5）
+    "Side"       NVARCHAR(1),                   -- D 记借方 / C 记贷方（规则固定；借方 = Amount，贷方 = −Amount，可为红字）；历史回填（RunType H）为空
     PRIMARY KEY ("RunId", "SrcId")
 )
 @@
@@ -47,6 +49,12 @@ DO BEGIN
      WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = 'MTC_CA_R_JDT' AND COLUMN_NAME = 'VendorCode';
     IF :n = 0 THEN
         EXEC 'ALTER TABLE "MTC_CA_R_JDT" ADD ("VendorCode" NVARCHAR(50))';
+    END IF;
+    -- 2026-11-11 借贷方向固定（同旧 0801）
+    SELECT COUNT(*) INTO n FROM SYS.TABLE_COLUMNS
+     WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = 'MTC_CA_R_JDT_SRC' AND COLUMN_NAME = 'Side';
+    IF :n = 0 THEN
+        EXEC 'ALTER TABLE "MTC_CA_R_JDT_SRC" ADD ("Side" NVARCHAR(1))';
     END IF;
 END
 @@
@@ -201,10 +209,10 @@ UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "De
 @@
 UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('GOODS_TAIL_MAX', 'PARAM', '尾差与校验', 315, '发出商品尾差结转上限', 'DEC', NULL, '元（含）：140601 本期合计在 ± 本值以内的转 640101（JZ04），如 1；超过的 POST-10 报出') WITH PRIMARY KEY
 @@
--- 费用固定借方红字（用户 2026-11-08）：YF01 / IO01 退回、盘盈时不把费用记到贷方，同旧 0801
-UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JDT_RED_DEBIT_TRANSCODES', '0000-00', '9999-99', ',YF01,IO01,', 'LIST', '费用固定记借方的凭证代码：费用科目（行上科目）固定借方、存货科目固定贷方，退回 / 盘盈使净额反向时用红字（负数），不换到另一方；同旧 0801（用户 2026-11-08）') WITH PRIMARY KEY
+-- 2026-11-08 的 JDT_RED_DEBIT_TRANSCODES（YF01 / IO01 费用固定借方）已取消：2026-11-11 起全部凭证代码按规则固定借贷方向（用户 2026-11-11）
+DELETE FROM "MTC_CA_C_PARAM" WHERE "ParamCode" = 'JDT_RED_DEBIT_TRANSCODES'
 @@
-UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JDT_RED_DEBIT_TRANSCODES', 'PARAM', '凭证与对账', 425, '费用固定借方（红字）的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 YF01,IO01；列出的凭证费用科目固定借方、存货科目固定贷方，反向用负数') WITH PRIMARY KEY
+DELETE FROM "MTC_CA_C_PARAM_DEF" WHERE "ParamCode" = 'JDT_RED_DEBIT_TRANSCODES'
 @@
 UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('WW_HIST_OCR', '0000-00', '9999-99', 'P016', 'STR', '历史委外差异转出（JZ05）借方的成本中心，按它归费用池（用户 2026-11-04）') WITH PRIMARY KEY
 @@

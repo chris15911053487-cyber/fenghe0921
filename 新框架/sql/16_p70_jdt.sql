@@ -168,6 +168,8 @@ END
 --   PUR2 材料、PUR3 委外加工费：冲回本期应付发票 / 贷项系统凭证中参数 PUR2_REV_ACCTS / PUR3_REV_ACCTS 科目的行（Q23 先保留旧口径）；
 --        本期开票及其取消（INV）：借 220202 = 冲回的暂估；借存货 / 140803 = 发票 − 暂估
 --   不基于收货 / 退货的发票由 PRE-20 报出（Q24 用户说明不会出现）；非库存物料（加工费物料以外）不暂估，按发票的系统凭证处理（Q25）
+--   借贷方向同旧 6101_1（用户 2026-11-11）：冲回系统凭证的行记在原分录同一方、金额取反（红字冲销）；PUR1 / PUR4 存货 / 140802 借方、220202 贷方；
+--   PUR2 / PUR3 开票的 220202、存货 / 140803 都记借方。Side 写进 R_JDT_SRC，P70 按它分借贷（见 P70 末尾）
 CREATE OR REPLACE PROCEDURE "MTC_CA_P74_AP_JDT" (IN RunId BIGINT, OUT RowCnt BIGINT)
 LANGUAGE SQLSCRIPT AS
 BEGIN
@@ -190,46 +192,47 @@ BEGIN
            LEFT JOIN :stockAct SA ON SA."ItmsGrpCod" = I."ItmsGrpCod"
           WHERE A."RunId" = :RunId AND A."DocDate" BETWEEN :d0 AND :d1;
     gl = SELECT TO_NVARCHAR(H."TransType") AS "TransType", J."TransId", J."Line_ID", J."Account", J."Debit" - J."Credit" AS "Amt",
-                J."U_VendorCode" AS "Vendor"
+                J."U_VendorCode" AS "Vendor", CASE WHEN J."Debit" <> 0 THEN 'D' ELSE 'C' END AS "Side"
            FROM "OJDT" H JOIN "JDT1" J ON J."TransId" = H."TransId"
           WHERE H."RefDate" BETWEEN :d0 AND :d1 AND H."TransType" IN ('18', '19', '20', '21');
 
     src = -- PUR5：收货 / 退货系统凭证全部反向
           SELECT CAST('PUR5' AS NVARCHAR(10)) AS "TransCode", CAST("Account" AS NVARCHAR(15)) AS "AcctCode",
                  CAST("Vendor" AS NVARCHAR(50)) AS "VendorCode", CAST(-ROUND("Amt", 2) AS DECIMAL(19,2)) AS "Amount",
-                 CAST('GL' AS NVARCHAR(10)) AS "SrcType", CAST("TransId" || '-' || "Line_ID" AS NVARCHAR(100)) AS "SrcKey"
+                 CAST('GL' AS NVARCHAR(10)) AS "SrcType", CAST("TransId" || '-' || "Line_ID" AS NVARCHAR(100)) AS "SrcKey",
+                 CAST("Side" AS NVARCHAR(1)) AS "Side"
             FROM :gl WHERE "TransType" IN ('20', '21')
           -- PUR1 / PUR4：暂估、退货
           UNION ALL
           SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, CASE WHEN "AccrType" = 'MAT' THEN "StockAct" ELSE :wwFee END,
-                 NULL, "AccrAmt", 'DOC', "Key"
+                 NULL, "AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" IN ('ACCR', 'RET')
           UNION ALL
-          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key"
+          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key", 'C'
             FROM :mv WHERE "MoveType" IN ('ACCR', 'RET')
           -- PUR2 / PUR3：冲回发票系统凭证的指定科目
           UNION ALL
-          SELECT 'PUR2', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID"
+          SELECT 'PUR2', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID", "Side"
             FROM :gl WHERE "TransType" IN ('18', '19')
              AND (LOCATE(:rev2, ',' || LEFT("Account", 4) || ',') > 0 OR LOCATE(:rev2, ',' || "Account" || ',') > 0)
           UNION ALL
-          SELECT 'PUR3', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID"
+          SELECT 'PUR3', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID", "Side"
             FROM :gl WHERE "TransType" IN ('18', '19')
              AND (LOCATE(:rev3, ',' || LEFT("Account", 4) || ',') > 0 OR LOCATE(:rev3, ',' || "Account" || ',') > 0)
           -- PUR2 / PUR3：开票冲回暂估（借 220202）、发票差异（借存货 / 140803）
           UNION ALL
-          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key"
+          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" = 'INV'
           UNION ALL
           SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, CASE WHEN "AccrType" = 'MAT' THEN "StockAct" ELSE :wwDif END,
-                 NULL, IFNULL("DocAmt", 0) + "AccrAmt", 'DOC', "Key"
+                 NULL, IFNULL("DocAmt", 0) + "AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" = 'INV';
 
     SELECT IFNULL(MAX("SrcId"), 0) INTO maxId FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId;
     INSERT INTO "MTC_CA_R_JDT_SRC" ("FcCode", "RunType", "Scenario", "RunId", "SrcId", "TransCode", "AcctCode", "OcrCode", "Project",
-                                    "Amount", "SrcType", "SrcKey", "VendorCode")
+                                    "Amount", "SrcType", "SrcKey", "VendorCode", "Side")
     SELECT :fc, :rt, :scen, :RunId, :maxId + ROW_NUMBER() OVER (ORDER BY "TransCode", "SrcType", "SrcKey", "AcctCode"),
-           "TransCode", "AcctCode", NULL, NULL, "Amount", "SrcType", "SrcKey", "VendorCode"
+           "TransCode", "AcctCode", NULL, NULL, "Amount", "SrcType", "SrcKey", "VendorCode", "Side"
       FROM :src WHERE "Amount" <> 0;
     RowCnt := ::ROWCOUNT;
 END
@@ -249,9 +252,7 @@ BEGIN
     DECLARE wwWt NVARCHAR(200); DECLARE smpSt NVARCHAR(500); DECLARE custDom NVARCHAR(50); DECLARE custExp NVARCHAR(50);
     DECLARE maxId BIGINT;
     DECLARE costOnly NVARCHAR(200); DECLARE gTailMax DECIMAL(19,2); DECLARE gRes DECIMAL(19,2); DECLARE gOk INT; DECLARE nJz4 INT;
-    DECLARE redCodes NVARCHAR(200); DECLARE apAcct NVARCHAR(15);
     CALL "MTC_CA_P_RUN_CTX"(:RunId, fc, rt, scen, d0, d1);
-    apAcct := "MTC_CA_F_ACCT"('AP_ACCRUAL', :fc);
     -- 业务口径参数（2026-10-27 从代码中的固定值改为参数）
     wwWt := IFNULL("MTC_CA_F_PARAM"('WW_WORTYPES', :fc), ',50,');
     smpSt := IFNULL("MTC_CA_F_PARAM"('SAMPLE_SALTYPES', :fc), ',样品销售,');
@@ -271,8 +272,6 @@ BEGIN
     costCodes := IFNULL("MTC_CA_F_PARAM"('COST_TRANSCODES', :fc), ',');
     costOnly := IFNULL("MTC_CA_F_PARAM"('RECON_COSTONLY_AREAS', :fc), ',WIP_PROD,GOODS,WW_MAT,');
     gTailMax := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('GOODS_TAIL_MAX', :fc), '1'), 19, 2);
-    -- 费用固定记借方的凭证代码（用户 2026-11-08，同旧 0801）：费用科目在借方、存货科目在贷方，退回 / 盘盈多于领用 / 盘亏时用红字（负数），不换方向
-    redCodes := IFNULL("MTC_CA_F_PARAM"('JDT_RED_DEBIT_TRANSCODES', :fc), ',YF01,IO01,');
 
     stockAct =SELECT TO_NVARCHAR("ItmsGrpCod") AS "ItmsGrpCod", MAX("StockAct") AS "Acct"
                  FROM "OGAR" WHERE "PeriodCat" = LEFT(:fc, 4) GROUP BY "ItmsGrpCod";
@@ -316,138 +315,138 @@ BEGIN
           SELECT CAST('MR01' AS NVARCHAR(10)) AS "TransCode", CAST("StockAct" AS NVARCHAR(15)) AS "AcctCode",
                  CAST(NULL AS NVARCHAR(20)) AS "OcrCode", CAST(NULL AS NVARCHAR(20)) AS "Project",
                  CAST("Amount" AS DECIMAL(19,2)) AS "Amount", CAST('LINE' AS NVARCHAR(10)) AS "SrcType",
-                 CAST("LineId" AS NVARCHAR(100)) AS "SrcKey"
+                 CAST("LineId" AS NVARCHAR(100)) AS "SrcKey", CAST('D' AS NVARCHAR(1)) AS "Side"
             FROM :base WHERE "Src" = 'APDIF'
           UNION ALL
-          SELECT 'MR01', "AcctCode", NULL, NULL, -"Amount", 'LINE', TO_NVARCHAR("LineId") FROM :base WHERE "Src" = 'APDIF'
+          SELECT 'MR01', "AcctCode", NULL, NULL, -"Amount", 'LINE', TO_NVARCHAR("LineId"), 'C' FROM :base WHERE "Src" = 'APDIF'
           -- MR02 手工重估：借重估科目 −金额、贷存货 −金额。只取 MRV1：MRV2 是旧 0501 写的 0 数量尾差，新框架由 TAIL-01 / JZ04 处理，
           -- 业务端（P20_LINE）也只收 MRV1，再读 MRV2 会让存货科目总账与业务差一张 MRV2（POST-09，2026-10-17）
           UNION ALL
-          SELECT 'MR02', T1."U_AcctCode", NULL, NULL, -ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId"
+          SELECT 'MR02', T1."U_AcctCode", NULL, NULL, -ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId", 'D'
             FROM "@MTC_OMRV" T0 JOIN "@MTC_OMRV1" T1 ON T0."DocEntry" = T1."DocEntry"
            WHERE T0."U_BaseType" = 'MRV1' AND IFNULL(T0."Canceled", 'N') = 'N' AND T0."U_DocDate" BETWEEN :d0 AND :d1
           UNION ALL
-          SELECT 'MR02', T1."U_StockCode", NULL, NULL, ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId"
+          SELECT 'MR02', T1."U_StockCode", NULL, NULL, ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId", 'C'
             FROM "@MTC_OMRV" T0 JOIN "@MTC_OMRV1" T1 ON T0."DocEntry" = T1."DocEntry"
            WHERE T0."U_BaseType" = 'MRV1' AND IFNULL(T0."Canceled", 'N') = 'N' AND T0."U_DocDate" BETWEEN :d0 AND :d1
-          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货；写 R_JDT 时费用固定借方、存货固定贷方，退回多于领用用红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
+          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货；退回多于领用时红字（用户 2026-11-08）
           UNION ALL
-          SELECT 'YF01', B."AcctCode", B."OcrCode", P."Project", -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT 'YF01', B."AcctCode", B."OcrCode", P."Project", -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B LEFT JOIN :prj P ON P."ObjType" = B."ObjType" AND P."DocEntry" = B."DocEntry" AND P."LineNum" = B."LineNum"
            WHERE B."TransCode" IN ('I04', 'O04')
           UNION ALL
-          SELECT 'YF01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I04', 'O04')
+          SELECT 'YF01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('I04', 'O04')
           -- PP01 生产领料（O03 / O07）、WW01 委外领料（O08 / O09）：借订单在产品科目、贷存货
           UNION ALL
-          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, O."WipAcct", NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, O."WipAcct", NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry"
            WHERE B."Cat" IN ('ISSUE', 'RTN304') AND B."TransCode" IN ('O03', 'O07', 'O08', 'O09')
           UNION ALL
-          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B
            WHERE B."Cat" IN ('ISSUE', 'RTN304') AND B."TransCode" IN ('O03', 'O07', 'O08', 'O09')
-          -- IO02 形态转换：借 A 存货、贷 B 存货
+          -- IO02 形态转换：借 A 存货（I05）、贷 B 存货（O05），同一科目借贷各一行，不轧差（同旧 0801）
           UNION ALL
-          SELECT 'IO02', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I05', 'O05')
-          -- IO01 盘点：借行上科目、贷存货；盘盈不换方向，费用借方红字、存货贷方红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
+          SELECT 'IO02', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), CASE WHEN B."TransCode" = 'I05' THEN 'D' ELSE 'C' END FROM :base B WHERE B."TransCode" IN ('I05', 'O05')
+          -- IO01 盘点：借行上科目、贷存货；盘盈不换方向，费用借方红字、存货贷方红字（用户 2026-11-08）
           UNION ALL
-          SELECT 'IO01', B."AcctCode", B."OcrCode", NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
+          SELECT 'IO01', B."AcctCode", B."OcrCode", NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D' FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
           UNION ALL
-          SELECT 'IO01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
+          SELECT 'IO01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
           -- PP05 生产入库 / WW03 委外入库：借存货、贷订单在产品科目
           UNION ALL
-          SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry" WHERE B."Cat" = 'RCPT'
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, O."WipAcct", CASE WHEN O."IsWw" = 'Y' THEN NULL ELSE O."ShopOcr" END, NULL,
-                 -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+                 -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry" WHERE B."Cat" = 'RCPT'
           --   PP05 中分摊的制造、人工：改贷 500103 / 500102（按分摊额，未分摊部分留在费用科目，Q13）
           UNION ALL
-          SELECT 'PP05', O."WipAcct", O."ShopOcr", NULL, O."AllocMfg" + O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', O."WipAcct", O."ShopOcr", NULL, O."AllocMfg" + O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND (O."AllocMfg" <> 0 OR O."AllocLab" <> 0)
           UNION ALL
-          SELECT 'PP05', :mfgAcct, NULL, NULL, -O."AllocMfg", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', :mfgAcct, NULL, NULL, -O."AllocMfg", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND O."AllocMfg" <> 0
           UNION ALL
-          SELECT 'PP05', :labAcct, NULL, NULL, -O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', :labAcct, NULL, NULL, -O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND O."AllocLab" <> 0
           --   WW03 中结转的加工费：改贷 140802（按订单归集额，S4 决定）
           UNION ALL
-          SELECT 'WW03', :wwMat, NULL, NULL, F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'WW03', :wwMat, NULL, NULL, F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" WHERE O."IsWw" = 'Y' AND F."Car" <> 0
           UNION ALL
-          SELECT 'WW03', :wwFee, NULL, NULL, -F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'WW03', :wwFee, NULL, NULL, -F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" WHERE O."IsWw" = 'Y' AND F."Car" <> 0
-          -- JZ01 / JZ03 关单差异：借 510199 / 510198，贷订单在产品科目（委外的加工费部分贷 140802）
+          -- JZ01 / JZ03 关单差异：同旧 COJZ_01 / 03，两行都记借方：510199 / 510198 正数，订单在产品科目红字（委外的加工费部分 140802 红字）
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'JZ03' ELSE 'JZ01' END, CASE WHEN O."IsWw" = 'Y' THEN :clsWw ELSE :clsProd END,
-                 NULL, NULL, ROUND(O."CloseDifAmt", 2), 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+                 NULL, NULL, ROUND(O."CloseDifAmt", 2), 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O WHERE ROUND(O."CloseDifAmt", 2) <> 0
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'JZ03' ELSE 'JZ01' END, O."WipAcct", NULL, NULL,
-                 -(ROUND(O."CloseDifAmt", 2) - CASE WHEN O."IsWw" = 'Y' THEN IFNULL(F."Cls", 0) ELSE 0 END), 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+                 -(ROUND(O."CloseDifAmt", 2) - CASE WHEN O."IsWw" = 'Y' THEN IFNULL(F."Cls", 0) ELSE 0 END), 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O LEFT JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry"
            WHERE ROUND(O."CloseDifAmt", 2) <> 0
           UNION ALL
-          SELECT 'JZ03', :wwFee, NULL, NULL, -F."Cls", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'JZ03', :wwFee, NULL, NULL, -F."Cls", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry"
            WHERE O."IsWw" = 'Y' AND ROUND(O."CloseDifAmt", 2) <> 0 AND F."Cls" <> 0
-          -- JZ05 历史委外差异转出（用户 2026-11-04）：借 WW_HIST_EXP（510109，成本中心 WW_HIST_OCR），140801 记借方红字（写 R_JDT 时处理）；510109 由下面的 PP04 结转
+          -- JZ05 历史委外差异转出（用户 2026-11-04）：两行都记借方，WW_HIST_EXP（510109，成本中心 WW_HIST_OCR）正数、140801 红字；510109 由下面的 PP04 结转
           UNION ALL
-          SELECT 'JZ05', "AcctCode", "OcrCode", NULL, ROUND("Amount", 2), 'ORDER', "SrcKey"
+          SELECT 'JZ05', "AcctCode", "OcrCode", NULL, ROUND("Amount", 2), 'ORDER', "SrcKey", 'D'
             FROM "MTC_CA_S_EXP" WHERE "RunId" = :RunId AND "Src" = 'WWHIST'
           UNION ALL
-          SELECT 'JZ05', :wwMat, NULL, NULL, -ROUND("Amount", 2), 'ORDER', "SrcKey"
+          SELECT 'JZ05', :wwMat, NULL, NULL, -ROUND("Amount", 2), 'ORDER', "SrcKey", 'D'
             FROM "MTC_CA_S_EXP" WHERE "RunId" = :RunId AND "Src" = 'WWHIST'
-          -- JZ04 零库存尾差结转（TAIL-01，Q31/Q32）：TailAmt 为负 = 期末多出的金额转出：借 TAIL_ADJ、贷存货；为正相反
+          -- JZ04 零库存尾差结转（TAIL-01，Q31/Q32）：同旧 COJZ_04，存货固定借方、TAIL_ADJ 固定贷方；TailAmt 为负 = 期末多出的金额转出，两边都是红字
           UNION ALL
-          SELECT 'JZ04', SA."Acct", NULL, NULL, ROUND(R."TailAmt", 2), 'ITEM', R."ItemCode"
+          SELECT 'JZ04', SA."Acct", NULL, NULL, ROUND(R."TailAmt", 2), 'ITEM', R."ItemCode", 'D'
             FROM "MTC_CA_R_ITEM" R
             JOIN "MTC_CA_S_ITEM" I ON I."RunId" = R."RunId" AND I."ItemCode" = R."ItemCode"
             LEFT JOIN :stockAct SA ON SA."ItmsGrpCod" = I."ItmsGrpCod"
            WHERE R."RunId" = :RunId AND ROUND(R."TailAmt", 2) <> 0
           UNION ALL
-          SELECT 'JZ04', :tailAcct, NULL, NULL, -ROUND("TailAmt", 2), 'ITEM', "ItemCode"
+          SELECT 'JZ04', :tailAcct, NULL, NULL, -ROUND("TailAmt", 2), 'ITEM', "ItemCode", 'C'
             FROM "MTC_CA_R_ITEM" WHERE "RunId" = :RunId AND ROUND("TailAmt", 2) <> 0
           -- DN01 销售交货 / 退货：借发出商品、贷存货
           UNION ALL
-          SELECT 'DN01', :goods, NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
+          SELECT 'DN01', :goods, NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D' FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
           UNION ALL
-          SELECT 'DN01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
+          SELECT 'DN01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
           -- DN02 / DN04 样品：发出商品转样品成本，含视同销售销项税（国内按平台价，国外按成本 × 系数）
           UNION ALL
           SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :sample, M."U_OcrCode", NULL,
                  -(B."Amount" + CASE WHEN M."CustType" = :custExp THEN ROUND(B."Amount" * :expFactor * :vatRate, 2)
-                                     ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END), 'LINE', TO_NVARCHAR(B."LineId")
+                                     ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END), 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
             LEFT JOIN :ptp P ON P."U_ItemCode" = B."ItemCode"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           UNION ALL
-          SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :goods, NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :goods, NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           UNION ALL
           SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :vatOut, NULL, NULL,
                  CASE WHEN M."CustType" = :custExp THEN ROUND(B."Amount" * :expFactor * :vatRate, 2)
-                      ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END, 'LINE', TO_NVARCHAR(B."LineId")
+                      ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END, 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
             LEFT JOIN :ptp P ON P."U_ItemCode" = B."ItemCode"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           -- DN03 开票结转销售成本：借 6401（按客户类型），贷发出商品
           UNION ALL
-          SELECT 'DN03', CASE WHEN "CustType" = :custDom THEN :cogsDom WHEN "CustType" = :custExp THEN :cogsExp END, NULL, NULL, "Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT 'DN03', CASE WHEN "CustType" = :custDom THEN :cogsDom WHEN "CustType" = :custExp THEN :cogsExp END, NULL, NULL, "Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum", 'D'
             FROM :invCost WHERE IFNULL("Cost", 0) <> 0
           UNION ALL
-          SELECT 'DN03', :goods, NULL, NULL, -"Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT 'DN03', :goods, NULL, NULL, -"Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum", 'C'
             FROM :invCost WHERE IFNULL("Cost", 0) <> 0
           -- AR03 / AR04 未开票交货的销售成本暂估（截至期末未清数量，非样品）：借 6401、贷发出商品
           UNION ALL
           SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, CASE WHEN "CustType" = :custDom THEN :cogsDom ELSE :cogsExp END,
-                 NULL, NULL, "CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum"
+                 NULL, NULL, "CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum", 'D'
             FROM "MTC_CA_R_GOODS_OUT" WHERE "RunId" = :RunId AND "IsSample" = 'N' AND "CustType" IN (:custDom, :custExp) AND IFNULL("CostAmt", 0) <> 0
           UNION ALL
-          SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, :goods, NULL, NULL, -"CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, :goods, NULL, NULL, -"CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum", 'C'
             FROM "MTC_CA_R_GOODS_OUT" WHERE "RunId" = :RunId AND "IsSample" = 'N' AND "CustType" IN (:custDom, :custExp) AND IFNULL("CostAmt", 0) <> 0;
 
     -- PP04 制造费用结转：本次生成的凭证与总账（不含成本模块生成的凭证代码）在 5101 科目上的本期发生额，全部转入 500103
@@ -465,7 +464,7 @@ BEGIN
     -- JZ04 发出商品尾差（用户 2026-11-01：财务不允许 140601 留 0.01）：140601 本期应为 0（POST-10），
     -- 本期 = 总账 + 未清凭单中本期参与对账的分录（成本凭证、B1 自动冲销的成本凭证；GOODS 不在 RECON_COSTONLY_AREAS 时全部分录）
     --      + 本次底稿中本期尚未过账的 140601 分录（同 MTC_CA_F_RECON_LEDGER 的口径，手工调整不算）。
-    -- 不为 0 且在 ±GOODS_TAIL_MAX（默认 1 元）以内的，借 / 贷 TAIL_ADJ（640101 主营业务成本），贷 / 借 140601，期末差额 = 期初差额。
+    -- 不为 0 且在 ±GOODS_TAIL_MAX（默认 1 元）以内的，140601 记借方、TAIL_ADJ（640101 主营业务成本）记贷方（同存货尾差，金额可为红字），期末差额 = 期初差额。
     -- 超过上限的不处理，留给 POST-10 报出（不是尾差，要查原因）；JZ04 本期已在 140601 过账时也不处理。
     -- 按计算时的总账算：计算后上月 AR03 / AR04 的冲销或其他成本凭证才过账的，要重新计算。
     gpd = SELECT DISTINCT "TransCode" FROM (
@@ -494,47 +493,47 @@ BEGIN
     gOk := CASE WHEN :gRes <> 0 AND ABS(:gRes) <= :gTailMax AND :nJz4 = 0 AND IFNULL(:goods, '') <> '' AND IFNULL(:tailAcct, '') <> '' THEN 1 ELSE 0 END;
     gTail = SELECT CAST('JZ04' AS NVARCHAR(10)) AS "TransCode", CAST(:goods AS NVARCHAR(15)) AS "AcctCode",
                    CAST(NULL AS NVARCHAR(20)) AS "OcrCode", CAST(NULL AS NVARCHAR(20)) AS "Project",
-                   CAST(-:gRes AS DECIMAL(19,2)) AS "Amount", CAST('GOODS' AS NVARCHAR(10)) AS "SrcType", CAST(:goods AS NVARCHAR(100)) AS "SrcKey"
+                   CAST(-:gRes AS DECIMAL(19,2)) AS "Amount", CAST('GOODS' AS NVARCHAR(10)) AS "SrcType", CAST(:goods AS NVARCHAR(100)) AS "SrcKey",
+                   CAST('D' AS NVARCHAR(1)) AS "Side"
               FROM DUMMY WHERE :gOk = 1
             UNION ALL
-            SELECT 'JZ04', :tailAcct, NULL, NULL, :gRes, 'GOODS', :goods FROM DUMMY WHERE :gOk = 1;
+            SELECT 'JZ04', :tailAcct, NULL, NULL, :gRes, 'GOODS', :goods, 'C' FROM DUMMY WHERE :gOk = 1;
 
     -- P74 已写入 PUR1–PUR5，接在其后编号
     SELECT IFNULL(MAX("SrcId"), 0) INTO maxId FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId;
+    -- PP04 同旧 0801：500103 借方、各 5101 科目贷方（510199 等为负时贷方红字）
     INSERT INTO "MTC_CA_R_JDT_SRC" ("FcCode", "RunType", "Scenario", "RunId", "SrcId", "TransCode", "AcctCode", "OcrCode", "Project",
-                                    "Amount", "SrcType", "SrcKey")
+                                    "Amount", "SrcType", "SrcKey", "Side")
     SELECT :fc, :rt, :scen, :RunId, :maxId + ROW_NUMBER() OVER (ORDER BY "TransCode", "SrcType", "SrcKey", "AcctCode"),
-           "TransCode", "AcctCode", NULLIF("OcrCode", ''), NULLIF("Project", ''), "Amount", "SrcType", "SrcKey"
+           "TransCode", "AcctCode", NULLIF("OcrCode", ''), NULLIF("Project", ''), "Amount", "SrcType", "SrcKey", "Side"
       FROM (SELECT * FROM :src
             UNION ALL
             SELECT * FROM :gTail
             UNION ALL
-            SELECT 'PP04', :mfgAcct, NULL, NULL, ROUND("Amt", 2), 'GL', "AcctCode" FROM :pp4 WHERE ROUND("Amt", 2) <> 0
+            SELECT 'PP04', :mfgAcct, NULL, NULL, ROUND("Amt", 2), 'GL', "AcctCode", 'D' FROM :pp4 WHERE ROUND("Amt", 2) <> 0
             UNION ALL
-            SELECT 'PP04', "AcctCode", NULL, NULL, -ROUND("Amt", 2), 'GL', "AcctCode" FROM :pp4 WHERE ROUND("Amt", 2) <> 0)
+            SELECT 'PP04', "AcctCode", NULL, NULL, -ROUND("Amt", 2), 'GL', "AcctCode", 'C' FROM :pp4 WHERE ROUND("Amt", 2) <> 0)
      WHERE "Amount" <> 0;
 
+    -- 借贷方向（用户 2026-11-11，统一同旧 0801 / COJZ / 6101_1）：每条来源规则自己定记在借方还是贷方（R_JDT_SRC.Side），
+    --   按 凭证代码 × 方向 × 科目 × 成本中心 × 项目 × 供应商 汇总；金额为负时留在原方向记红字（负数），不按正负换到另一方，
+    --   同一科目借贷两边都有时各一行、不轧差（如 IO02）。Side 为空（不应出现）时按正负。B1 要允许负数金额。
     INSERT INTO "MTC_CA_R_JDT" ("FcCode", "RunType", "Scenario", "RunId", "TransCode", "LineNo", "TransName", "RefDate",
                                 "AcctCode", "Debit", "Credit", "OcrCode", "Project", "VendorCode")
     SELECT :fc, :rt, :scen, :RunId, S."TransCode",
-           -- JZ05 按用户给的分录（用户 2026-11-04）：两行都记借方，140801 在前、红字（负数）
-           -- JDT_RED_DEBIT_TRANSCODES（YF01 / IO01，用户 2026-11-08）：费用科目固定借方在前，存货科目固定贷方，负数红字
-           -- PUR1 / PUR4 同旧 6101_1（用户 2026-11-08）：存货 / 140802 固定借方、220202 固定贷方，退货多于收货时记负数（红字）
-           ROW_NUMBER() OVER (PARTITION BY S."TransCode" ORDER BY CASE WHEN S."TransCode" = 'JZ05' THEN CASE WHEN S."Amt" < 0 THEN 0 ELSE 1 END
-                                                                   WHEN S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN 1
-                                                                   WHEN S."Amt" > 0 THEN 0 ELSE 1 END, S."AcctCode", S."OcrCode", S."Project", S."VendorCode"),
+           -- 借方在前；JZ01 / JZ03 / JZ05 两行都在借方，在产品科目（红字那行）在前，同旧 COJZ 和用户给的 JZ05 分录
+           ROW_NUMBER() OVER (PARTITION BY S."TransCode" ORDER BY CASE WHEN S."Side" = 'D' THEN 0 ELSE 1 END,
+                                CASE WHEN S."TransCode" IN ('JZ01', 'JZ03', 'JZ05') AND S."AcctCode" IN (:wipProd, :wwMat, :wwFee) THEN 0 ELSE 1 END,
+                                S."AcctCode", S."OcrCode", S."Project", S."VendorCode"),
            C."TrnsCodDsc", :d1, S."AcctCode",
-           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN S."Amt" WHEN S."Side" = 'C' THEN 0 WHEN S."Amt" > 0 THEN S."Amt" ELSE 0 END,
-           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN -S."Amt" WHEN S."Amt" < 0 THEN -S."Amt" ELSE 0 END,
+           CASE WHEN S."Side" = 'D' THEN S."Amt" ELSE 0 END,
+           CASE WHEN S."Side" = 'C' THEN -S."Amt" ELSE 0 END,
            S."OcrCode", S."Project", S."VendorCode"
-      FROM (SELECT G.*, CASE WHEN G."TransCode" IN ('PUR1', 'PUR4') THEN CASE WHEN G."AcctCode" = :apAcct THEN 'C' ELSE 'D' END
-                             WHEN LOCATE(:redCodes, ',' || G."TransCode" || ',') = 0 THEN NULL
-                             WHEN G."AcctCode" IN (SELECT "Acct" FROM :stockAct) THEN 'C' ELSE 'D' END AS "Side"
-              FROM (SELECT "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
-                      FROM (SELECT "TransCode", "AcctCode", NULLIF("OcrCode", '') AS "OcrCode", NULLIF("Project", '') AS "Project",
-                                   NULLIF("VendorCode", '') AS "VendorCode", "Amount"
-                              FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId)
-                     GROUP BY "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode") G) S
+      FROM (SELECT "TransCode", "Side", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
+              FROM (SELECT "TransCode", IFNULL("Side", CASE WHEN "Amount" >= 0 THEN 'D' ELSE 'C' END) AS "Side", "AcctCode",
+                           NULLIF("OcrCode", '') AS "OcrCode", NULLIF("Project", '') AS "Project", NULLIF("VendorCode", '') AS "VendorCode", "Amount"
+                      FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId)
+             GROUP BY "TransCode", "Side", "AcctCode", "OcrCode", "Project", "VendorCode") S
       LEFT JOIN "OTRC" C ON C."TrnsCode" = S."TransCode"
      WHERE S."Amt" <> 0;
     RowCnt := ::ROWCOUNT;

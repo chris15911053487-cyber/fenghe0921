@@ -491,3 +491,33 @@ input.mgck{vertical-align:-2px;margin:0 4px 0 0;cursor:pointer}
 @media (max-width:900px){.gd{grid-template-columns:1fr}.gd-side{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding-bottom:8px}}
 body.gd-printing{background:var(--surface);padding:16px 24px}
 @media print{body.gd-printing .gd-fig img{max-height:80vh}.gd-doc h2{break-after:avoid}.gd-t tr,.gd-fig{break-inside:avoid}}
+/* 成本追溯 · 桑基图（2026-11-13） */
+.tvcv.skcv{overflow:auto;max-height:480px}
+.sk{display:block;font-size:12px}
+.sk rect[class^="tv-"],.sk .skz{fill:rgb(var(--k,var(--c-muted)))}
+.sk .skz{fill:rgb(var(--c-muted) / .5)}
+.sk .skl{fill:rgb(var(--c-muted) / .22);cursor:pointer;transition:fill .12s}
+.sk .skl.src{fill:rgb(var(--k) / .3)}
+.sk .skl:hover{fill:rgb(var(--c-muted) / .4)}
+.sk .skl.src:hover{fill:rgb(var(--k) / .5)}
+.sk .skl.ng{fill:url(#skNg);stroke:rgb(var(--c-muted) / .5);stroke-width:.5}
+.sk .skpat{fill:rgb(var(--c-muted) / .55)}
+.sk .skn{cursor:pointer}
+.sk .skf{fill:none;stroke:none}
+.sk .skn:hover .skf{stroke:var(--accent);stroke-width:1}
+.sk .skn.on .skf{stroke:var(--accent);stroke-width:2}
+.sk .skn.ng rect[class^="tv-"]{opacity:.55}
+.sk .skhit{fill:transparent}
+.sk .skt{fill:var(--ink);pointer-events:none}
+.sk .skv{fill:var(--muted)}
+.sk{margin:0 auto}
+.sk .skt{paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}
+.sk .skl{fill:rgb(var(--c-muted) / .16)}
+.sk .sks{fill:var(--muted)}
+.sk .skl[class*="tv-"]{fill:rgb(var(--k) / .3)}
+.sk .skl[class*="tv-"]:hover{fill:rgb(var(--k) / .5)}
+.sk .skl.ng[class*="tv-"]{fill:url(#skNg)}
+.sk .skb{font-weight:600}
+.sk rect.sko{opacity:.45}
+.tv-k-ord2{--k:var(--c-muted)}
+.sk .skl.tv-k-ord2{fill:rgb(var(--c-muted) / .2)}

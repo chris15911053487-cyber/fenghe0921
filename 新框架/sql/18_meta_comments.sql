@@ -508,11 +508,13 @@ COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."TransCode" IS 'OTRC.TrnsCode'
 @@
 COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."AcctCode" IS '空 = 取不到科目（POST-08 报出）'
 @@
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Amount" IS '正 = 借方，负 = 贷方'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Amount" IS '正 = 借方效果，负 = 贷方效果；记在哪一方看 Side'
 @@
 COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."SrcType" IS 'LINE 单据行（R_LINE.LineId）/ ORDER 订单 / DOC B1 单据行 / GL 总账 / OMRV 重估行'
 @@
 COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."VendorCode" IS '220202 应付暂估行的供应商（写入 JDT1.U_VendorCode，PUR1–PUR5）'
+@@
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Side" IS 'D 记借方（借方 = Amount）/ C 记贷方（贷方 = −Amount）；由规则固定，金额为负时红字不换方向（同旧 0801，用户 2026-11-11）；历史回填为空'
 @@
 COMMENT ON COLUMN "MTC_CA_R_JDT"."VendorCode" IS '供应商（JDT1.U_VendorCode）'
 @@

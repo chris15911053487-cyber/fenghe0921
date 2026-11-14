@@ -268,7 +268,7 @@ async function tabBody(pane, quiet){
               const [sm, sr] = await Promise.all([q("jdtSrcSum", {runId:id, transCode:c.TransCode, lineNo:String(x.LineNo)}), q("jdtSrc", {runId:id, transCode:c.TransCode, lineNo:String(x.LineNo)})]);
               const so = asObjs(sm), n = so.reduce((a, y) => a + Number(y.Lines || 0), 0),
                     dr = so.reduce((a, y) => a + Number(y.Debit || 0), 0), cr = so.reduce((a, y) => a + Number(y.Credit || 0), 0);
-              const ok = Math.abs((dr - cr) - (Number(x.Debit || 0) - Number(x.Credit || 0))) < 0.005;   // 比净额：JZ05 的 140801 是借方红字
+              const ok = Math.abs((dr - cr) - (Number(x.Debit || 0) - Number(x.Credit || 0))) < 0.005;   // 比净额：借贷方向按规则固定，红字行的借 / 贷可为负（用户 2026-11-11）
               el.innerHTML = `<div class="bar"><h3 style="margin:0">第 ${esc(x.LineNo)} 行 ${esc(acctText(x.AcctCode))} 的业务明细</h3><span class="sp"></span><button class="btn" id="jsrcCsv">导出明细</button></div>`
                 + `<p class="hint">共 ${n} 条来源，借 ${fmtNum(dr)}、贷 ${fmtNum(cr)}，${ok ? "与分录行一致" : "<b>与分录行不一致，请反馈</b>"}。来源：单据行 = 本次计算的库存变动；订单 = 按订单汇总（分摊、关单差异、加工费结转）；B1 单据行 = 交货、发票、收货等；总账分录 = 冲回的系统凭证或 PP04 汇总的科目；重估单 = @MTC_OMRV。</p>`
                 + `<h3>按来源和交易类型汇总</h3>` + table(sm, {empty:"没有来源"})

@@ -1057,7 +1057,7 @@ END
 -- ---------------------------------------------------------------------
 -- R10 成本凭证清单及来源：本期成本模块生成的凭证（每种凭证代码一张）、分录、每笔分录的业务来源。
 -- 参数：Fc 账期, TransCode 凭证代码, Acct 科目（开头匹配）, STYPE 0 按凭证代码（含 B1 凭单批号和状态）/ 1 分录 / 2 来源明细
--- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细金额正 = 借、负 = 贷。
+-- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细按 R_JDT_SRC.Side 列在借方或贷方，金额可为红字（用户 2026-11-11）。
 -- 勾稽：来源明细合计 = 分录合计（V06）。
 -- 列名：凭证代码、科目编码这两列输出英文字段名 TransCode、AcctCode（用户 2026-11-07，这张报表特殊），执行台按 rpt_defs.json 的 alias 显示中文。
 -- 运行号 = 这张报表取数的成本运行（MTC_CA_RUN.RunId，规则同 R00），三种显示方式都有；分录号 = R_JDT.LineNo（凭证代码内的行号），分录、来源明细都有，
@@ -1097,8 +1097,9 @@ BEGIN
                CASE S."SrcType" WHEN 'LINE' THEN '单据行' WHEN 'ORDER' THEN '订单' WHEN 'DOC' THEN 'B1 单据行' WHEN 'GL' THEN '总账分录' WHEN 'OMRV' THEN '重估单'
                                 WHEN 'ITEM' THEN '物料尾差' ELSE S."SrcType" END AS "来源类型",
                S."SrcKey" AS "来源键",
-               CAST(CASE WHEN S."Amount" > 0 THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
-               CAST(CASE WHEN S."Amount" < 0 THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
+               -- 借贷方向取 Side（规则固定，可为红字，用户 2026-11-11）；历史回填没有 Side，按正负
+               CAST(CASE WHEN IFNULL(S."Side", CASE WHEN S."Amount" > 0 THEN 'D' ELSE 'C' END) = 'D' THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
+               CAST(CASE WHEN IFNULL(S."Side", CASE WHEN S."Amount" > 0 THEN 'D' ELSE 'C' END) = 'C' THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
                COALESCE(D."DocDate", CAST(NULL AS DATE)) AS "单据日期",
                "MTC_CA_F_RPT_DTNAME"(COALESCE(D."ObjType", O."OrderType")) AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
                COALESCE(L."ItemCode", O."ItemCode") AS "物料", L."TransCode" AS "交易类型", CAST(L."Qty" AS DECIMAL(19,6)) AS "数量",
@@ -1110,10 +1111,12 @@ BEGIN
           LEFT JOIN "MTC_CA_S_ORDER" LO ON LO."RunId" = L."RunId" AND LO."OrderType" = L."OrderType" AND LO."OrderEntry" = L."OrderEntry"
           LEFT JOIN "MTC_CA_S_ORDER" O ON S."SrcType" = 'ORDER' AND O."RunId" = S."RunId" AND O."OrderType" || '-' || TO_NVARCHAR(O."OrderEntry") = S."SrcKey"
           LEFT JOIN "OACT" A ON A."AcctCode" = S."AcctCode"
-          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 方向 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          --   方向：借方行 Debit <> 0，贷方行 Debit = 0；历史回填的来源没有 Side，不比方向
           LEFT JOIN "MTC_CA_R_JDT" J ON J."RunId" = S."RunId" AND J."TransCode" = S."TransCode" AND IFNULL(J."AcctCode", '') = IFNULL(S."AcctCode", '')
                                     AND IFNULL(J."OcrCode", '') = IFNULL(S."OcrCode", '') AND IFNULL(J."Project", '') = IFNULL(S."Project", '')
                                     AND IFNULL(J."VendorCode", '') = IFNULL(S."VendorCode", '')
+                                    AND (S."Side" IS NULL OR S."Side" = CASE WHEN J."Debit" <> 0 THEN 'D' ELSE 'C' END)
           LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE S."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE S."TransCode" = X."V"))

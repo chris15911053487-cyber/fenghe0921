@@ -1,6 +1,6 @@
 -- FH100 成本核算一次性部署包（由 新框架/tools/build_deploy.py 生成，不要手改）
--- 生成时间 2026-11-11 20:21；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
--- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 990 条语句。对象不带 schema 前缀，建在当前 schema。
+-- 生成时间 2026-11-13 19:44；旧模块来源 0921-数据库同步/（2026-10-11 15:33）
+-- 内容：旧成本模块 92 个对象、配置数据 104 行、新框架 991 条语句。对象不带 schema 前缀，建在当前 schema。
 -- 语句之间用单独一行 @@ 分隔，每条以 "-- @stmt 说明" 开头。请用 部署包/ 里的执行程序执行（见 README.md）。
 -- 已有的表、索引、序列、旧模块视图和过程会跳过（不会覆盖）；新框架的视图、过程是 CREATE OR REPLACE，配置初值是 UPSERT。
 -- 未包含：MTC_COST_0302_INVNTDETAIL1_Backup_20260927（备份/测试对象）
@@ -22474,7 +22474,7 @@ COMMENT ON TABLE "MTC_CA_R_HOURS_NEED" IS '需要维护工时的产品（PRE-14 
 -- 单据行定价类别 Cat（R_LINE.Cat）：
 --   FIX     采购收货 / 退货、应付发票 / 贷项差额、库存重估 I11、委外发票差异 APDIF：取 S_LINE.SrcAmt（规则 FIX-01；APDIF 记委外要素）
 --   NOCOST  U_CalType=InvntCost 的重估：金额计入期末，不参与加权单价（RVL-01）
---   SRT     有原交货的销售退货：原交货在以前账期的，按原交货单位成本（SRT-01）；原交货在本期的改为 WAVG（与原交货同价）
+--   SRT     有原交货的销售退货：原交货在以前账期的，按原交货单位成本（SRT-01）；BOOTSTRAP_FC 及以前取历史回填运行 H（料工费拆分），没回填才取旧 0302 全部记材料；原交货在本期的改为 WAVG（与原交货同价）
 --   SRTQ    没有原交货的销售退货：期初维护价（SRT-01）；没有维护价的改为 WAVG（SRT-03，PRE-04 警告）
 --   CNL     交货 / 退货的取消单：原单为固定价的按原单单位成本反向；否则 WAVG（CNL-01）
 --           原单在本期按加权价的，与原单同价相抵，正常；本期找不到原单的才由 POST-05 报出
@@ -22731,7 +22731,8 @@ BEGIN
      WHERE T0."RunId" = :RunId AND T0."Cat" = 'SRTQ'
        AND NOT EXISTS (SELECT 1 FROM "MTC_CA_S_QCPRICE" Q WHERE Q."RunId" = T0."RunId" AND Q."ItemCode" = T0."ItemCode");
 
-    -- 3. 销售退货配对：原交货在本期 → WAVG；在以前账期 → 新框架当期结果，2026-08 及以前取旧 0302；都没有 → WAVG 并标注
+    -- 3. 销售退货配对：原交货在本期 → WAVG；在以前账期 → 新框架当期结果（BOOTSTRAP_FC 及以前取历史回填运行 H，料工费按旧完工比例拆分，
+    --    同成本报表取数规则，用户 2026-11-13）；都没有 → 旧 0302（全部记材料）；再没有 → WAVG 并标注
     srt = SELECT T0."LineId", S."BaseEntry", S."BaseLine"
             FROM "MTC_CA_R_LINE" T0
             JOIN "MTC_CA_S_LINE" S ON S."RunId" = T0."RunId" AND S."LineId" = T0."LineId"
@@ -22741,16 +22742,23 @@ BEGIN
              JOIN "MTC_CA_S_LINE" O ON O."RunId" = :RunId AND O."ObjType" = '15'
                                    AND TO_NVARCHAR(O."DocEntry") = R."BaseEntry" AND TO_NVARCHAR(O."LineNum") = R."BaseLine"
             GROUP BY R."LineId";
-    prevNew = SELECT R."LineId", S."FcCode",
+    -- 可取的以前运行：BOOTSTRAP_FC 以后的正式运行 F；BOOTSTRAP_FC 及以前每期最近一次成功的历史运行 H
+    prevRun = SELECT "RunId", 'F' AS "RunType" FROM "MTC_CA_RUN"
+               WHERE "Status" = 'OK' AND "RunType" = 'F' AND "FcCode" < :fc AND "FcCode" > IFNULL(:boot, '')
+              UNION ALL
+              SELECT MAX("RunId"), 'H' FROM "MTC_CA_RUN"
+               WHERE "Status" = 'OK' AND "RunType" = 'H' AND "Scenario" = 'LEGACY' AND "FcCode" < :fc AND "FcCode" <= :boot
+               GROUP BY "FcCode";
+    prevNew = SELECT R."LineId", S."FcCode", U."RunType",
                      SUM(L."MatAmt") / NULLIF(SUM(L."Qty"), 0) AS "UMat", SUM(L."MfgAmt") / NULLIF(SUM(L."Qty"), 0) AS "UMfg",
                      SUM(L."LabAmt") / NULLIF(SUM(L."Qty"), 0) AS "ULab", SUM(L."SubAmt") / NULLIF(SUM(L."Qty"), 0) AS "USub"
                 FROM :srt R
                 JOIN "MTC_CA_S_LINE" S ON S."ObjType" = '15' AND TO_NVARCHAR(S."DocEntry") = R."BaseEntry"
                                       AND TO_NVARCHAR(S."LineNum") = R."BaseLine" AND S."FcCode" < :fc
-                JOIN "MTC_CA_RUN" U ON U."RunId" = S."RunId" AND U."Status" = 'OK' AND U."RunType" = 'F'
+                JOIN :prevRun U ON U."RunId" = S."RunId"
                 JOIN "MTC_CA_R_LINE" L ON L."RunId" = S."RunId" AND L."LineId" = S."LineId"
                WHERE R."LineId" NOT IN (SELECT "LineId" FROM :same)
-               GROUP BY R."LineId", S."FcCode";
+               GROUP BY R."LineId", S."FcCode", U."RunType";
     prevOld = SELECT R."LineId", MAX(O."FcCode") AS "FcCode",
                      SUM(O."Amount") / NULLIF(SUM(O."Quantity"), 0) AS "UMat"
                 FROM :srt R
@@ -22767,7 +22775,8 @@ BEGIN
       FROM :same
     UNION ALL
     SELECT :fc, :rt, :scen, :RunId, P."LineId", 'SRT', NULL, P."FcCode", 'MTC_CA_R_LINE', P."UMat", P."UMfg", P."ULab", P."USub",
-           '原交货在 ' || P."FcCode" || '，取新框架当期成本'
+           '原交货在 ' || P."FcCode" || CASE WHEN P."RunType" = 'H' THEN '，取历史回填运行成本（料工费按旧框架完工比例拆分）'
+                                             ELSE '，取新框架当期成本' END
       FROM (SELECT X.*, ROW_NUMBER() OVER (PARTITION BY X."LineId" ORDER BY X."FcCode" DESC) AS "Rn" FROM :prevNew X) P
      WHERE P."Rn" = 1
     UNION ALL
@@ -23960,7 +23969,8 @@ END
 -- @stmt 新框架 15_p70_tables.sql #1
 -- =====================================================================
 -- 新成本框架 第 3 期：凭证、发出商品、应付暂估的结果表与配置（设计稿 3.5、4.5、4.6，清单 S12、S15）
--- 凭证先逐条来源写 R_JDT_SRC（金额带符号：正 = 借，负 = 贷），再按 凭证代码 × 科目 × 成本中心 × 项目 汇总成 R_JDT。
+-- 凭证先逐条来源写 R_JDT_SRC（金额带符号：正 = 借方效果，负 = 贷方效果；记在哪一方看 Side），再按 凭证代码 × 方向 × 科目 × 成本中心 × 项目 × 供应商
+-- 汇总成 R_JDT。方向由每条规则固定（同旧 0801），金额为负时在原方向记红字，不换方向（用户 2026-11-11）。
 -- 新框架只生成凭证，不过账；过账仍在库外完成（与旧 0801 相同）。
 -- =====================================================================
 CREATE COLUMN TABLE "MTC_CA_R_JDT_SRC" (
@@ -23975,6 +23985,7 @@ CREATE COLUMN TABLE "MTC_CA_R_JDT_SRC" (
     "SrcKey"     NVARCHAR(100),
     "Note"       NVARCHAR(200),
     "VendorCode" NVARCHAR(50),                  -- 220202 应付暂估行的供应商（写入 JDT1.U_VendorCode，PUR1–PUR5）
+    "Side"       NVARCHAR(1),                   -- D 记借方 / C 记贷方（规则固定；借方 = Amount，贷方 = −Amount，可为红字）；历史回填（RunType H）为空
     PRIMARY KEY ("RunId", "SrcId")
 )
 
@@ -24041,6 +24052,12 @@ DO BEGIN
      WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = 'MTC_CA_R_JDT' AND COLUMN_NAME = 'VendorCode';
     IF :n = 0 THEN
         EXEC 'ALTER TABLE "MTC_CA_R_JDT" ADD ("VendorCode" NVARCHAR(50))';
+    END IF;
+    -- 2026-11-11 借贷方向固定（同旧 0801）
+    SELECT COUNT(*) INTO n FROM SYS.TABLE_COLUMNS
+     WHERE SCHEMA_NAME = CURRENT_SCHEMA AND TABLE_NAME = 'MTC_CA_R_JDT_SRC' AND COLUMN_NAME = 'Side';
+    IF :n = 0 THEN
+        EXEC 'ALTER TABLE "MTC_CA_R_JDT_SRC" ADD ("Side" NVARCHAR(1))';
     END IF;
 END
 
@@ -24439,12 +24456,12 @@ UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnNam
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #39
--- 费用固定借方红字（用户 2026-11-08）：YF01 / IO01 退回、盘盈时不把费用记到贷方，同旧 0801
-UPSERT "MTC_CA_C_PARAM" ("ParamCode", "FromFc", "ToFc", "Value", "DataType", "Descr") VALUES ('JDT_RED_DEBIT_TRANSCODES', '0000-00', '9999-99', ',YF01,IO01,', 'LIST', '费用固定记借方的凭证代码：费用科目（行上科目）固定借方、存货科目固定贷方，退回 / 盘盈使净额反向时用红字（负数），不换到另一方；同旧 0801（用户 2026-11-08）') WITH PRIMARY KEY
+-- 2026-11-08 的 JDT_RED_DEBIT_TRANSCODES（YF01 / IO01 费用固定借方）已取消：2026-11-11 起全部凭证代码按规则固定借贷方向（用户 2026-11-11）
+DELETE FROM "MTC_CA_C_PARAM" WHERE "ParamCode" = 'JDT_RED_DEBIT_TRANSCODES'
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #40
-UPSERT "MTC_CA_C_PARAM_DEF" ("ParamCode", "Target", "Category", "SortNo", "CnName", "DataType", "Choices", "Hint") VALUES ('JDT_RED_DEBIT_TRANSCODES', 'PARAM', '凭证与对账', 425, '费用固定借方（红字）的凭证代码', 'LIST', NULL, '凭证代码逗号分隔，如 YF01,IO01；列出的凭证费用科目固定借方、存货科目固定贷方，反向用负数') WITH PRIMARY KEY
+DELETE FROM "MTC_CA_C_PARAM_DEF" WHERE "ParamCode" = 'JDT_RED_DEBIT_TRANSCODES'
 
 @@
 -- @stmt 新框架 15_p70_tables.sql #41
@@ -24670,6 +24687,8 @@ END
 --   PUR2 材料、PUR3 委外加工费：冲回本期应付发票 / 贷项系统凭证中参数 PUR2_REV_ACCTS / PUR3_REV_ACCTS 科目的行（Q23 先保留旧口径）；
 --        本期开票及其取消（INV）：借 220202 = 冲回的暂估；借存货 / 140803 = 发票 − 暂估
 --   不基于收货 / 退货的发票由 PRE-20 报出（Q24 用户说明不会出现）；非库存物料（加工费物料以外）不暂估，按发票的系统凭证处理（Q25）
+--   借贷方向同旧 6101_1（用户 2026-11-11）：冲回系统凭证的行记在原分录同一方、金额取反（红字冲销）；PUR1 / PUR4 存货 / 140802 借方、220202 贷方；
+--   PUR2 / PUR3 开票的 220202、存货 / 140803 都记借方。Side 写进 R_JDT_SRC，P70 按它分借贷（见 P70 末尾）
 CREATE OR REPLACE PROCEDURE "MTC_CA_P74_AP_JDT" (IN RunId BIGINT, OUT RowCnt BIGINT)
 LANGUAGE SQLSCRIPT AS
 BEGIN
@@ -24692,46 +24711,47 @@ BEGIN
            LEFT JOIN :stockAct SA ON SA."ItmsGrpCod" = I."ItmsGrpCod"
           WHERE A."RunId" = :RunId AND A."DocDate" BETWEEN :d0 AND :d1;
     gl = SELECT TO_NVARCHAR(H."TransType") AS "TransType", J."TransId", J."Line_ID", J."Account", J."Debit" - J."Credit" AS "Amt",
-                J."U_VendorCode" AS "Vendor"
+                J."U_VendorCode" AS "Vendor", CASE WHEN J."Debit" <> 0 THEN 'D' ELSE 'C' END AS "Side"
            FROM "OJDT" H JOIN "JDT1" J ON J."TransId" = H."TransId"
           WHERE H."RefDate" BETWEEN :d0 AND :d1 AND H."TransType" IN ('18', '19', '20', '21');
 
     src = -- PUR5：收货 / 退货系统凭证全部反向
           SELECT CAST('PUR5' AS NVARCHAR(10)) AS "TransCode", CAST("Account" AS NVARCHAR(15)) AS "AcctCode",
                  CAST("Vendor" AS NVARCHAR(50)) AS "VendorCode", CAST(-ROUND("Amt", 2) AS DECIMAL(19,2)) AS "Amount",
-                 CAST('GL' AS NVARCHAR(10)) AS "SrcType", CAST("TransId" || '-' || "Line_ID" AS NVARCHAR(100)) AS "SrcKey"
+                 CAST('GL' AS NVARCHAR(10)) AS "SrcType", CAST("TransId" || '-' || "Line_ID" AS NVARCHAR(100)) AS "SrcKey",
+                 CAST("Side" AS NVARCHAR(1)) AS "Side"
             FROM :gl WHERE "TransType" IN ('20', '21')
           -- PUR1 / PUR4：暂估、退货
           UNION ALL
           SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, CASE WHEN "AccrType" = 'MAT' THEN "StockAct" ELSE :wwFee END,
-                 NULL, "AccrAmt", 'DOC', "Key"
+                 NULL, "AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" IN ('ACCR', 'RET')
           UNION ALL
-          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key"
+          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR1' ELSE 'PUR4' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key", 'C'
             FROM :mv WHERE "MoveType" IN ('ACCR', 'RET')
           -- PUR2 / PUR3：冲回发票系统凭证的指定科目
           UNION ALL
-          SELECT 'PUR2', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID"
+          SELECT 'PUR2', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID", "Side"
             FROM :gl WHERE "TransType" IN ('18', '19')
              AND (LOCATE(:rev2, ',' || LEFT("Account", 4) || ',') > 0 OR LOCATE(:rev2, ',' || "Account" || ',') > 0)
           UNION ALL
-          SELECT 'PUR3', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID"
+          SELECT 'PUR3', "Account", "Vendor", -ROUND("Amt", 2), 'GL', "TransId" || '-' || "Line_ID", "Side"
             FROM :gl WHERE "TransType" IN ('18', '19')
              AND (LOCATE(:rev3, ',' || LEFT("Account", 4) || ',') > 0 OR LOCATE(:rev3, ',' || "Account" || ',') > 0)
           -- PUR2 / PUR3：开票冲回暂估（借 220202）、发票差异（借存货 / 140803）
           UNION ALL
-          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key"
+          SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, :apAcct, "CardCode", -"AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" = 'INV'
           UNION ALL
           SELECT CASE WHEN "AccrType" = 'MAT' THEN 'PUR2' ELSE 'PUR3' END, CASE WHEN "AccrType" = 'MAT' THEN "StockAct" ELSE :wwDif END,
-                 NULL, IFNULL("DocAmt", 0) + "AccrAmt", 'DOC', "Key"
+                 NULL, IFNULL("DocAmt", 0) + "AccrAmt", 'DOC', "Key", 'D'
             FROM :mv WHERE "MoveType" = 'INV';
 
     SELECT IFNULL(MAX("SrcId"), 0) INTO maxId FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId;
     INSERT INTO "MTC_CA_R_JDT_SRC" ("FcCode", "RunType", "Scenario", "RunId", "SrcId", "TransCode", "AcctCode", "OcrCode", "Project",
-                                    "Amount", "SrcType", "SrcKey", "VendorCode")
+                                    "Amount", "SrcType", "SrcKey", "VendorCode", "Side")
     SELECT :fc, :rt, :scen, :RunId, :maxId + ROW_NUMBER() OVER (ORDER BY "TransCode", "SrcType", "SrcKey", "AcctCode"),
-           "TransCode", "AcctCode", NULL, NULL, "Amount", "SrcType", "SrcKey", "VendorCode"
+           "TransCode", "AcctCode", NULL, NULL, "Amount", "SrcType", "SrcKey", "VendorCode", "Side"
       FROM :src WHERE "Amount" <> 0;
     RowCnt := ::ROWCOUNT;
 END
@@ -24753,9 +24773,7 @@ BEGIN
     DECLARE wwWt NVARCHAR(200); DECLARE smpSt NVARCHAR(500); DECLARE custDom NVARCHAR(50); DECLARE custExp NVARCHAR(50);
     DECLARE maxId BIGINT;
     DECLARE costOnly NVARCHAR(200); DECLARE gTailMax DECIMAL(19,2); DECLARE gRes DECIMAL(19,2); DECLARE gOk INT; DECLARE nJz4 INT;
-    DECLARE redCodes NVARCHAR(200); DECLARE apAcct NVARCHAR(15);
     CALL "MTC_CA_P_RUN_CTX"(:RunId, fc, rt, scen, d0, d1);
-    apAcct := "MTC_CA_F_ACCT"('AP_ACCRUAL', :fc);
     -- 业务口径参数（2026-10-27 从代码中的固定值改为参数）
     wwWt := IFNULL("MTC_CA_F_PARAM"('WW_WORTYPES', :fc), ',50,');
     smpSt := IFNULL("MTC_CA_F_PARAM"('SAMPLE_SALTYPES', :fc), ',样品销售,');
@@ -24775,8 +24793,6 @@ BEGIN
     costCodes := IFNULL("MTC_CA_F_PARAM"('COST_TRANSCODES', :fc), ',');
     costOnly := IFNULL("MTC_CA_F_PARAM"('RECON_COSTONLY_AREAS', :fc), ',WIP_PROD,GOODS,WW_MAT,');
     gTailMax := TO_DECIMAL(IFNULL("MTC_CA_F_PARAM"('GOODS_TAIL_MAX', :fc), '1'), 19, 2);
-    -- 费用固定记借方的凭证代码（用户 2026-11-08，同旧 0801）：费用科目在借方、存货科目在贷方，退回 / 盘盈多于领用 / 盘亏时用红字（负数），不换方向
-    redCodes := IFNULL("MTC_CA_F_PARAM"('JDT_RED_DEBIT_TRANSCODES', :fc), ',YF01,IO01,');
 
     stockAct =SELECT TO_NVARCHAR("ItmsGrpCod") AS "ItmsGrpCod", MAX("StockAct") AS "Acct"
                  FROM "OGAR" WHERE "PeriodCat" = LEFT(:fc, 4) GROUP BY "ItmsGrpCod";
@@ -24820,138 +24836,138 @@ BEGIN
           SELECT CAST('MR01' AS NVARCHAR(10)) AS "TransCode", CAST("StockAct" AS NVARCHAR(15)) AS "AcctCode",
                  CAST(NULL AS NVARCHAR(20)) AS "OcrCode", CAST(NULL AS NVARCHAR(20)) AS "Project",
                  CAST("Amount" AS DECIMAL(19,2)) AS "Amount", CAST('LINE' AS NVARCHAR(10)) AS "SrcType",
-                 CAST("LineId" AS NVARCHAR(100)) AS "SrcKey"
+                 CAST("LineId" AS NVARCHAR(100)) AS "SrcKey", CAST('D' AS NVARCHAR(1)) AS "Side"
             FROM :base WHERE "Src" = 'APDIF'
           UNION ALL
-          SELECT 'MR01', "AcctCode", NULL, NULL, -"Amount", 'LINE', TO_NVARCHAR("LineId") FROM :base WHERE "Src" = 'APDIF'
+          SELECT 'MR01', "AcctCode", NULL, NULL, -"Amount", 'LINE', TO_NVARCHAR("LineId"), 'C' FROM :base WHERE "Src" = 'APDIF'
           -- MR02 手工重估：借重估科目 −金额、贷存货 −金额。只取 MRV1：MRV2 是旧 0501 写的 0 数量尾差，新框架由 TAIL-01 / JZ04 处理，
           -- 业务端（P20_LINE）也只收 MRV1，再读 MRV2 会让存货科目总账与业务差一张 MRV2（POST-09，2026-10-17）
           UNION ALL
-          SELECT 'MR02', T1."U_AcctCode", NULL, NULL, -ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId"
+          SELECT 'MR02', T1."U_AcctCode", NULL, NULL, -ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId", 'D'
             FROM "@MTC_OMRV" T0 JOIN "@MTC_OMRV1" T1 ON T0."DocEntry" = T1."DocEntry"
            WHERE T0."U_BaseType" = 'MRV1' AND IFNULL(T0."Canceled", 'N') = 'N' AND T0."U_DocDate" BETWEEN :d0 AND :d1
           UNION ALL
-          SELECT 'MR02', T1."U_StockCode", NULL, NULL, ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId"
+          SELECT 'MR02', T1."U_StockCode", NULL, NULL, ROUND(T1."U_Amount", 2), 'OMRV', T1."DocEntry" || '-' || T1."LineId", 'C'
             FROM "@MTC_OMRV" T0 JOIN "@MTC_OMRV1" T1 ON T0."DocEntry" = T1."DocEntry"
            WHERE T0."U_BaseType" = 'MRV1' AND IFNULL(T0."Canceled", 'N') = 'N' AND T0."U_DocDate" BETWEEN :d0 AND :d1
-          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货；写 R_JDT 时费用固定借方、存货固定贷方，退回多于领用用红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
+          -- YF01 其他出入库（I04 / O04）：借行上科目、贷存货；退回多于领用时红字（用户 2026-11-08）
           UNION ALL
-          SELECT 'YF01', B."AcctCode", B."OcrCode", P."Project", -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT 'YF01', B."AcctCode", B."OcrCode", P."Project", -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B LEFT JOIN :prj P ON P."ObjType" = B."ObjType" AND P."DocEntry" = B."DocEntry" AND P."LineNum" = B."LineNum"
            WHERE B."TransCode" IN ('I04', 'O04')
           UNION ALL
-          SELECT 'YF01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I04', 'O04')
+          SELECT 'YF01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('I04', 'O04')
           -- PP01 生产领料（O03 / O07）、WW01 委外领料（O08 / O09）：借订单在产品科目、贷存货
           UNION ALL
-          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, O."WipAcct", NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, O."WipAcct", NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry"
            WHERE B."Cat" IN ('ISSUE', 'RTN304') AND B."TransCode" IN ('O03', 'O07', 'O08', 'O09')
           UNION ALL
-          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN B."TransCode" IN ('O08', 'O09') THEN 'WW01' ELSE 'PP01' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B
            WHERE B."Cat" IN ('ISSUE', 'RTN304') AND B."TransCode" IN ('O03', 'O07', 'O08', 'O09')
-          -- IO02 形态转换：借 A 存货、贷 B 存货
+          -- IO02 形态转换：借 A 存货（I05）、贷 B 存货（O05），同一科目借贷各一行，不轧差（同旧 0801）
           UNION ALL
-          SELECT 'IO02', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I05', 'O05')
-          -- IO01 盘点：借行上科目、贷存货；盘盈不换方向，费用借方红字、存货贷方红字（JDT_RED_DEBIT_TRANSCODES，用户 2026-11-08）
+          SELECT 'IO02', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), CASE WHEN B."TransCode" = 'I05' THEN 'D' ELSE 'C' END FROM :base B WHERE B."TransCode" IN ('I05', 'O05')
+          -- IO01 盘点：借行上科目、贷存货；盘盈不换方向，费用借方红字、存货贷方红字（用户 2026-11-08）
           UNION ALL
-          SELECT 'IO01', B."AcctCode", B."OcrCode", NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
+          SELECT 'IO01', B."AcctCode", B."OcrCode", NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D' FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
           UNION ALL
-          SELECT 'IO01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
+          SELECT 'IO01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('I10', 'O10')
           -- PP05 生产入库 / WW03 委外入库：借存货、贷订单在产品科目
           UNION ALL
-          SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry" WHERE B."Cat" = 'RCPT'
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'WW03' ELSE 'PP05' END, O."WipAcct", CASE WHEN O."IsWw" = 'Y' THEN NULL ELSE O."ShopOcr" END, NULL,
-                 -B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+                 -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :ord O ON O."OrderType" = B."OrderType" AND O."OrderEntry" = B."OrderEntry" WHERE B."Cat" = 'RCPT'
           --   PP05 中分摊的制造、人工：改贷 500103 / 500102（按分摊额，未分摊部分留在费用科目，Q13）
           UNION ALL
-          SELECT 'PP05', O."WipAcct", O."ShopOcr", NULL, O."AllocMfg" + O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', O."WipAcct", O."ShopOcr", NULL, O."AllocMfg" + O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND (O."AllocMfg" <> 0 OR O."AllocLab" <> 0)
           UNION ALL
-          SELECT 'PP05', :mfgAcct, NULL, NULL, -O."AllocMfg", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', :mfgAcct, NULL, NULL, -O."AllocMfg", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND O."AllocMfg" <> 0
           UNION ALL
-          SELECT 'PP05', :labAcct, NULL, NULL, -O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'PP05', :labAcct, NULL, NULL, -O."AllocLab", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O WHERE O."IsWw" = 'N' AND O."RecvQty" <> 0 AND O."AllocLab" <> 0
           --   WW03 中结转的加工费：改贷 140802（按订单归集额，S4 决定）
           UNION ALL
-          SELECT 'WW03', :wwMat, NULL, NULL, F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'WW03', :wwMat, NULL, NULL, F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" WHERE O."IsWw" = 'Y' AND F."Car" <> 0
           UNION ALL
-          SELECT 'WW03', :wwFee, NULL, NULL, -F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'WW03', :wwFee, NULL, NULL, -F."Car", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'C'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry" WHERE O."IsWw" = 'Y' AND F."Car" <> 0
-          -- JZ01 / JZ03 关单差异：借 510199 / 510198，贷订单在产品科目（委外的加工费部分贷 140802）
+          -- JZ01 / JZ03 关单差异：同旧 COJZ_01 / 03，两行都记借方：510199 / 510198 正数，订单在产品科目红字（委外的加工费部分 140802 红字）
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'JZ03' ELSE 'JZ01' END, CASE WHEN O."IsWw" = 'Y' THEN :clsWw ELSE :clsProd END,
-                 NULL, NULL, ROUND(O."CloseDifAmt", 2), 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+                 NULL, NULL, ROUND(O."CloseDifAmt", 2), 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O WHERE ROUND(O."CloseDifAmt", 2) <> 0
           UNION ALL
           SELECT CASE WHEN O."IsWw" = 'Y' THEN 'JZ03' ELSE 'JZ01' END, O."WipAcct", NULL, NULL,
-                 -(ROUND(O."CloseDifAmt", 2) - CASE WHEN O."IsWw" = 'Y' THEN IFNULL(F."Cls", 0) ELSE 0 END), 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+                 -(ROUND(O."CloseDifAmt", 2) - CASE WHEN O."IsWw" = 'Y' THEN IFNULL(F."Cls", 0) ELSE 0 END), 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O LEFT JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry"
            WHERE ROUND(O."CloseDifAmt", 2) <> 0
           UNION ALL
-          SELECT 'JZ03', :wwFee, NULL, NULL, -F."Cls", 'ORDER', O."OrderType" || '-' || O."OrderEntry"
+          SELECT 'JZ03', :wwFee, NULL, NULL, -F."Cls", 'ORDER', O."OrderType" || '-' || O."OrderEntry", 'D'
             FROM :ord O JOIN :fee F ON F."OrderType" = O."OrderType" AND F."OrderEntry" = O."OrderEntry"
            WHERE O."IsWw" = 'Y' AND ROUND(O."CloseDifAmt", 2) <> 0 AND F."Cls" <> 0
-          -- JZ05 历史委外差异转出（用户 2026-11-04）：借 WW_HIST_EXP（510109，成本中心 WW_HIST_OCR），140801 记借方红字（写 R_JDT 时处理）；510109 由下面的 PP04 结转
+          -- JZ05 历史委外差异转出（用户 2026-11-04）：两行都记借方，WW_HIST_EXP（510109，成本中心 WW_HIST_OCR）正数、140801 红字；510109 由下面的 PP04 结转
           UNION ALL
-          SELECT 'JZ05', "AcctCode", "OcrCode", NULL, ROUND("Amount", 2), 'ORDER', "SrcKey"
+          SELECT 'JZ05', "AcctCode", "OcrCode", NULL, ROUND("Amount", 2), 'ORDER', "SrcKey", 'D'
             FROM "MTC_CA_S_EXP" WHERE "RunId" = :RunId AND "Src" = 'WWHIST'
           UNION ALL
-          SELECT 'JZ05', :wwMat, NULL, NULL, -ROUND("Amount", 2), 'ORDER', "SrcKey"
+          SELECT 'JZ05', :wwMat, NULL, NULL, -ROUND("Amount", 2), 'ORDER', "SrcKey", 'D'
             FROM "MTC_CA_S_EXP" WHERE "RunId" = :RunId AND "Src" = 'WWHIST'
-          -- JZ04 零库存尾差结转（TAIL-01，Q31/Q32）：TailAmt 为负 = 期末多出的金额转出：借 TAIL_ADJ、贷存货；为正相反
+          -- JZ04 零库存尾差结转（TAIL-01，Q31/Q32）：同旧 COJZ_04，存货固定借方、TAIL_ADJ 固定贷方；TailAmt 为负 = 期末多出的金额转出，两边都是红字
           UNION ALL
-          SELECT 'JZ04', SA."Acct", NULL, NULL, ROUND(R."TailAmt", 2), 'ITEM', R."ItemCode"
+          SELECT 'JZ04', SA."Acct", NULL, NULL, ROUND(R."TailAmt", 2), 'ITEM', R."ItemCode", 'D'
             FROM "MTC_CA_R_ITEM" R
             JOIN "MTC_CA_S_ITEM" I ON I."RunId" = R."RunId" AND I."ItemCode" = R."ItemCode"
             LEFT JOIN :stockAct SA ON SA."ItmsGrpCod" = I."ItmsGrpCod"
            WHERE R."RunId" = :RunId AND ROUND(R."TailAmt", 2) <> 0
           UNION ALL
-          SELECT 'JZ04', :tailAcct, NULL, NULL, -ROUND("TailAmt", 2), 'ITEM', "ItemCode"
+          SELECT 'JZ04', :tailAcct, NULL, NULL, -ROUND("TailAmt", 2), 'ITEM', "ItemCode", 'C'
             FROM "MTC_CA_R_ITEM" WHERE "RunId" = :RunId AND ROUND("TailAmt", 2) <> 0
           -- DN01 销售交货 / 退货：借发出商品、贷存货
           UNION ALL
-          SELECT 'DN01', :goods, NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
+          SELECT 'DN01', :goods, NULL, NULL, -B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'D' FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
           UNION ALL
-          SELECT 'DN01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId") FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
+          SELECT 'DN01', B."StockAct", NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C' FROM :base B WHERE B."TransCode" IN ('O01', 'O06')
           -- DN02 / DN04 样品：发出商品转样品成本，含视同销售销项税（国内按平台价，国外按成本 × 系数）
           UNION ALL
           SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :sample, M."U_OcrCode", NULL,
                  -(B."Amount" + CASE WHEN M."CustType" = :custExp THEN ROUND(B."Amount" * :expFactor * :vatRate, 2)
-                                     ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END), 'LINE', TO_NVARCHAR(B."LineId")
+                                     ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END), 'LINE', TO_NVARCHAR(B."LineId"), 'D'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
             LEFT JOIN :ptp P ON P."U_ItemCode" = B."ItemCode"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           UNION ALL
-          SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :goods, NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId")
+          SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :goods, NULL, NULL, B."Amount", 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           UNION ALL
           SELECT CASE WHEN M."CustType" = :custExp THEN 'DN04' ELSE 'DN02' END, :vatOut, NULL, NULL,
                  CASE WHEN M."CustType" = :custExp THEN ROUND(B."Amount" * :expFactor * :vatRate, 2)
-                      ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END, 'LINE', TO_NVARCHAR(B."LineId")
+                      ELSE ROUND(B."Qty" * IFNULL(P."Price", 0) / :vatDiv * :vatRate, 2) END, 'LINE', TO_NVARCHAR(B."LineId"), 'C'
             FROM :base B JOIN :smp M ON M."ObjType" = B."ObjType" AND M."DocEntry" = B."DocEntry"
             LEFT JOIN :ptp P ON P."U_ItemCode" = B."ItemCode"
            WHERE B."TransCode" IN ('O01', 'O06') AND M."CustType" IN (:custDom, :custExp)
           -- DN03 开票结转销售成本：借 6401（按客户类型），贷发出商品
           UNION ALL
-          SELECT 'DN03', CASE WHEN "CustType" = :custDom THEN :cogsDom WHEN "CustType" = :custExp THEN :cogsExp END, NULL, NULL, "Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT 'DN03', CASE WHEN "CustType" = :custDom THEN :cogsDom WHEN "CustType" = :custExp THEN :cogsExp END, NULL, NULL, "Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum", 'D'
             FROM :invCost WHERE IFNULL("Cost", 0) <> 0
           UNION ALL
-          SELECT 'DN03', :goods, NULL, NULL, -"Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT 'DN03', :goods, NULL, NULL, -"Cost", 'DOC', "K" || '-' || "DocEntry" || '-' || "LineNum", 'C'
             FROM :invCost WHERE IFNULL("Cost", 0) <> 0
           -- AR03 / AR04 未开票交货的销售成本暂估（截至期末未清数量，非样品）：借 6401、贷发出商品
           UNION ALL
           SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, CASE WHEN "CustType" = :custDom THEN :cogsDom ELSE :cogsExp END,
-                 NULL, NULL, "CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum"
+                 NULL, NULL, "CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum", 'D'
             FROM "MTC_CA_R_GOODS_OUT" WHERE "RunId" = :RunId AND "IsSample" = 'N' AND "CustType" IN (:custDom, :custExp) AND IFNULL("CostAmt", 0) <> 0
           UNION ALL
-          SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, :goods, NULL, NULL, -"CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum"
+          SELECT CASE WHEN "CustType" = :custDom THEN 'AR03' ELSE 'AR04' END, :goods, NULL, NULL, -"CostAmt", 'DOC', "ObjType" || '-' || "DocEntry" || '-' || "LineNum", 'C'
             FROM "MTC_CA_R_GOODS_OUT" WHERE "RunId" = :RunId AND "IsSample" = 'N' AND "CustType" IN (:custDom, :custExp) AND IFNULL("CostAmt", 0) <> 0;
 
     -- PP04 制造费用结转：本次生成的凭证与总账（不含成本模块生成的凭证代码）在 5101 科目上的本期发生额，全部转入 500103
@@ -24969,7 +24985,7 @@ BEGIN
     -- JZ04 发出商品尾差（用户 2026-11-01：财务不允许 140601 留 0.01）：140601 本期应为 0（POST-10），
     -- 本期 = 总账 + 未清凭单中本期参与对账的分录（成本凭证、B1 自动冲销的成本凭证；GOODS 不在 RECON_COSTONLY_AREAS 时全部分录）
     --      + 本次底稿中本期尚未过账的 140601 分录（同 MTC_CA_F_RECON_LEDGER 的口径，手工调整不算）。
-    -- 不为 0 且在 ±GOODS_TAIL_MAX（默认 1 元）以内的，借 / 贷 TAIL_ADJ（640101 主营业务成本），贷 / 借 140601，期末差额 = 期初差额。
+    -- 不为 0 且在 ±GOODS_TAIL_MAX（默认 1 元）以内的，140601 记借方、TAIL_ADJ（640101 主营业务成本）记贷方（同存货尾差，金额可为红字），期末差额 = 期初差额。
     -- 超过上限的不处理，留给 POST-10 报出（不是尾差，要查原因）；JZ04 本期已在 140601 过账时也不处理。
     -- 按计算时的总账算：计算后上月 AR03 / AR04 的冲销或其他成本凭证才过账的，要重新计算。
     gpd = SELECT DISTINCT "TransCode" FROM (
@@ -24998,47 +25014,47 @@ BEGIN
     gOk := CASE WHEN :gRes <> 0 AND ABS(:gRes) <= :gTailMax AND :nJz4 = 0 AND IFNULL(:goods, '') <> '' AND IFNULL(:tailAcct, '') <> '' THEN 1 ELSE 0 END;
     gTail = SELECT CAST('JZ04' AS NVARCHAR(10)) AS "TransCode", CAST(:goods AS NVARCHAR(15)) AS "AcctCode",
                    CAST(NULL AS NVARCHAR(20)) AS "OcrCode", CAST(NULL AS NVARCHAR(20)) AS "Project",
-                   CAST(-:gRes AS DECIMAL(19,2)) AS "Amount", CAST('GOODS' AS NVARCHAR(10)) AS "SrcType", CAST(:goods AS NVARCHAR(100)) AS "SrcKey"
+                   CAST(-:gRes AS DECIMAL(19,2)) AS "Amount", CAST('GOODS' AS NVARCHAR(10)) AS "SrcType", CAST(:goods AS NVARCHAR(100)) AS "SrcKey",
+                   CAST('D' AS NVARCHAR(1)) AS "Side"
               FROM DUMMY WHERE :gOk = 1
             UNION ALL
-            SELECT 'JZ04', :tailAcct, NULL, NULL, :gRes, 'GOODS', :goods FROM DUMMY WHERE :gOk = 1;
+            SELECT 'JZ04', :tailAcct, NULL, NULL, :gRes, 'GOODS', :goods, 'C' FROM DUMMY WHERE :gOk = 1;
 
     -- P74 已写入 PUR1–PUR5，接在其后编号
     SELECT IFNULL(MAX("SrcId"), 0) INTO maxId FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId;
+    -- PP04 同旧 0801：500103 借方、各 5101 科目贷方（510199 等为负时贷方红字）
     INSERT INTO "MTC_CA_R_JDT_SRC" ("FcCode", "RunType", "Scenario", "RunId", "SrcId", "TransCode", "AcctCode", "OcrCode", "Project",
-                                    "Amount", "SrcType", "SrcKey")
+                                    "Amount", "SrcType", "SrcKey", "Side")
     SELECT :fc, :rt, :scen, :RunId, :maxId + ROW_NUMBER() OVER (ORDER BY "TransCode", "SrcType", "SrcKey", "AcctCode"),
-           "TransCode", "AcctCode", NULLIF("OcrCode", ''), NULLIF("Project", ''), "Amount", "SrcType", "SrcKey"
+           "TransCode", "AcctCode", NULLIF("OcrCode", ''), NULLIF("Project", ''), "Amount", "SrcType", "SrcKey", "Side"
       FROM (SELECT * FROM :src
             UNION ALL
             SELECT * FROM :gTail
             UNION ALL
-            SELECT 'PP04', :mfgAcct, NULL, NULL, ROUND("Amt", 2), 'GL', "AcctCode" FROM :pp4 WHERE ROUND("Amt", 2) <> 0
+            SELECT 'PP04', :mfgAcct, NULL, NULL, ROUND("Amt", 2), 'GL', "AcctCode", 'D' FROM :pp4 WHERE ROUND("Amt", 2) <> 0
             UNION ALL
-            SELECT 'PP04', "AcctCode", NULL, NULL, -ROUND("Amt", 2), 'GL', "AcctCode" FROM :pp4 WHERE ROUND("Amt", 2) <> 0)
+            SELECT 'PP04', "AcctCode", NULL, NULL, -ROUND("Amt", 2), 'GL', "AcctCode", 'C' FROM :pp4 WHERE ROUND("Amt", 2) <> 0)
      WHERE "Amount" <> 0;
 
+    -- 借贷方向（用户 2026-11-11，统一同旧 0801 / COJZ / 6101_1）：每条来源规则自己定记在借方还是贷方（R_JDT_SRC.Side），
+    --   按 凭证代码 × 方向 × 科目 × 成本中心 × 项目 × 供应商 汇总；金额为负时留在原方向记红字（负数），不按正负换到另一方，
+    --   同一科目借贷两边都有时各一行、不轧差（如 IO02）。Side 为空（不应出现）时按正负。B1 要允许负数金额。
     INSERT INTO "MTC_CA_R_JDT" ("FcCode", "RunType", "Scenario", "RunId", "TransCode", "LineNo", "TransName", "RefDate",
                                 "AcctCode", "Debit", "Credit", "OcrCode", "Project", "VendorCode")
     SELECT :fc, :rt, :scen, :RunId, S."TransCode",
-           -- JZ05 按用户给的分录（用户 2026-11-04）：两行都记借方，140801 在前、红字（负数）
-           -- JDT_RED_DEBIT_TRANSCODES（YF01 / IO01，用户 2026-11-08）：费用科目固定借方在前，存货科目固定贷方，负数红字
-           -- PUR1 / PUR4 同旧 6101_1（用户 2026-11-08）：存货 / 140802 固定借方、220202 固定贷方，退货多于收货时记负数（红字）
-           ROW_NUMBER() OVER (PARTITION BY S."TransCode" ORDER BY CASE WHEN S."TransCode" = 'JZ05' THEN CASE WHEN S."Amt" < 0 THEN 0 ELSE 1 END
-                                                                   WHEN S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN 1
-                                                                   WHEN S."Amt" > 0 THEN 0 ELSE 1 END, S."AcctCode", S."OcrCode", S."Project", S."VendorCode"),
+           -- 借方在前；JZ01 / JZ03 / JZ05 两行都在借方，在产品科目（红字那行）在前，同旧 COJZ 和用户给的 JZ05 分录
+           ROW_NUMBER() OVER (PARTITION BY S."TransCode" ORDER BY CASE WHEN S."Side" = 'D' THEN 0 ELSE 1 END,
+                                CASE WHEN S."TransCode" IN ('JZ01', 'JZ03', 'JZ05') AND S."AcctCode" IN (:wipProd, :wwMat, :wwFee) THEN 0 ELSE 1 END,
+                                S."AcctCode", S."OcrCode", S."Project", S."VendorCode"),
            C."TrnsCodDsc", :d1, S."AcctCode",
-           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN S."Amt" WHEN S."Side" = 'C' THEN 0 WHEN S."Amt" > 0 THEN S."Amt" ELSE 0 END,
-           CASE WHEN S."TransCode" = 'JZ05' OR S."Side" = 'D' THEN 0 WHEN S."Side" = 'C' THEN -S."Amt" WHEN S."Amt" < 0 THEN -S."Amt" ELSE 0 END,
+           CASE WHEN S."Side" = 'D' THEN S."Amt" ELSE 0 END,
+           CASE WHEN S."Side" = 'C' THEN -S."Amt" ELSE 0 END,
            S."OcrCode", S."Project", S."VendorCode"
-      FROM (SELECT G.*, CASE WHEN G."TransCode" IN ('PUR1', 'PUR4') THEN CASE WHEN G."AcctCode" = :apAcct THEN 'C' ELSE 'D' END
-                             WHEN LOCATE(:redCodes, ',' || G."TransCode" || ',') = 0 THEN NULL
-                             WHEN G."AcctCode" IN (SELECT "Acct" FROM :stockAct) THEN 'C' ELSE 'D' END AS "Side"
-              FROM (SELECT "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
-                      FROM (SELECT "TransCode", "AcctCode", NULLIF("OcrCode", '') AS "OcrCode", NULLIF("Project", '') AS "Project",
-                                   NULLIF("VendorCode", '') AS "VendorCode", "Amount"
-                              FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId)
-                     GROUP BY "TransCode", "AcctCode", "OcrCode", "Project", "VendorCode") G) S
+      FROM (SELECT "TransCode", "Side", "AcctCode", "OcrCode", "Project", "VendorCode", SUM("Amount") AS "Amt"
+              FROM (SELECT "TransCode", IFNULL("Side", CASE WHEN "Amount" >= 0 THEN 'D' ELSE 'C' END) AS "Side", "AcctCode",
+                           NULLIF("OcrCode", '') AS "OcrCode", NULLIF("Project", '') AS "Project", NULLIF("VendorCode", '') AS "VendorCode", "Amount"
+                      FROM "MTC_CA_R_JDT_SRC" WHERE "RunId" = :RunId)
+             GROUP BY "TransCode", "Side", "AcctCode", "OcrCode", "Project", "VendorCode") S
       LEFT JOIN "OTRC" C ON C."TrnsCode" = S."TransCode"
      WHERE S."Amt" <> 0;
     RowCnt := ::ROWCOUNT;
@@ -26984,7 +27000,7 @@ COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."AcctCode" IS '空 = 取不到科目（POST
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #255
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Amount" IS '正 = 借方，负 = 贷方'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Amount" IS '正 = 借方效果，负 = 贷方效果；记在哪一方看 Side'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #256
@@ -26996,666 +27012,670 @@ COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."VendorCode" IS '220202 应付暂估行的�
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #258
-COMMENT ON COLUMN "MTC_CA_R_JDT"."VendorCode" IS '供应商（JDT1.U_VendorCode）'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Side" IS 'D 记借方（借方 = Amount）/ C 记贷方（贷方 = −Amount）；由规则固定，金额为负时红字不换方向（同旧 0801，用户 2026-11-11）；历史回填为空'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #259
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."ObjType" IS '15 交货 / 16 不基于交货的销售退货'
+COMMENT ON COLUMN "MTC_CA_R_JDT"."VendorCode" IS '供应商（JDT1.U_VendorCode）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #260
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."CustType" IS '@MTC_SALORDTYPE.U_CustType'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."ObjType" IS '15 交货 / 16 不基于交货的销售退货'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #261
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."InvQty" IS '截至期末已开票（贷项）数量'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."CustType" IS '@MTC_SALORDTYPE.U_CustType'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #262
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RetQty" IS '截至期末已退货数量（基于交货的退货）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."InvQty" IS '截至期末已开票（贷项）数量'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #263
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."OpenQty" IS '带符号：交货为正、独立退货为负'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RetQty" IS '截至期末已退货数量（基于交货的退货）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #264
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."ObjType" IS '15 交货 / 16 不基于交货的销售退货'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."OpenQty" IS '带符号：交货为正、独立退货为负'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #265
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."InvQty" IS '截至上期末已开票（贷项）数量'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."ObjType" IS '15 交货 / 16 不基于交货的销售退货'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #266
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RetQty" IS '截至上期末已退货数量'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."InvQty" IS '截至上期末已开票（贷项）数量'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #267
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."OpenQty" IS '带符号：交货为正、独立退货为负'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RetQty" IS '截至上期末已退货数量'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #268
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."ObjType" IS '20 收货 / 21 不基于收货的退货'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."OpenQty" IS '带符号：交货为正、独立退货为负'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #269
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."AccrType" IS 'MAT 材料 / SUBFEE 委外费用'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."ObjType" IS '20 收货 / 21 不基于收货的退货'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #270
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."OpenQty" IS '带符号'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."AccrType" IS 'MAT 材料 / SUBFEE 委外费用'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #271
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."UnitPrice" IS '暂估单价'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."OpenQty" IS '带符号'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #272
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."ObjType" IS '15 交货 / 16 销售退货'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."UnitPrice" IS '暂估单价'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #273
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."UnitCost" IS '空 = 找不到成本（POST-12）'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."ObjType" IS '15 交货 / 16 销售退货'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #274
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."CostSrc" IS 'U_InitPrice / 本期 / 新框架 YYYY-MM / 旧0302'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."UnitCost" IS '空 = 找不到成本（POST-12）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #275
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."SrcObj" IS '被消耗的行：15 交货 / 16 不基于交货的销售退货'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."CostSrc" IS 'U_InitPrice / 本期 / 新框架 YYYY-MM / 旧0302'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #276
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."K" IS 'INV 应收发票 / RIN 应收贷项 / RET 基于交货的退货 / ADJ 全部消耗完的尾差'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."SrcObj" IS '被消耗的行：15 交货 / 16 不基于交货的销售退货'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #277
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."DocEntry" IS '消耗单据（含取消单）；ADJ 为原行'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."K" IS 'INV 应收发票 / RIN 应收贷项 / RET 基于交货的退货 / ADJ 全部消耗完的尾差'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #278
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."DocDate" IS 'ADJ 为期末日'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."DocEntry" IS '消耗单据（含取消单）；ADJ 为原行'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #279
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."CustType" IS '消耗单据的客户类型；ADJ 取原行的'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."DocDate" IS 'ADJ 为期末日'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #280
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."IsSample" IS '原行或消耗单据是样品销售：不做 DN03'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."CustType" IS '消耗单据的客户类型；ADJ 取原行的'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #281
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Qty" IS '与原行 DocQty 同号；取消单反号'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."IsSample" IS '原行或消耗单据是样品销售：不做 DN03'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #282
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."UnitCost" IS 'INV / RIN 取原行单位成本，RET 取退货行自己的'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Qty" IS '与原行 DocQty 同号；取消单反号'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #283
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Amount" IS 'ROUND(Qty × UnitCost, 2)；ADJ = 行金额 − 已消耗金额（本期新出现的部分）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."UnitCost" IS 'INV / RIN 取原行单位成本，RET 取退货行自己的'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #284
-COMMENT ON COLUMN "MTC_CA_C_OCR_MAP"."MapType" IS 'ITEMGRPTYPE：产品物料组的 OITB.U_ItemGrpType → 车间成本中心'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Amount" IS 'ROUND(Qty × UnitCost, 2)；ADJ = 行金额 − 已消耗金额（本期新出现的部分）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #285
-COMMENT ON COLUMN "MTC_CA_RUN"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_C_OCR_MAP"."MapType" IS 'ITEMGRPTYPE：产品物料组的 OITB.U_ItemGrpType → 车间成本中心'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #286
-COMMENT ON COLUMN "MTC_CA_RUN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_RUN"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #287
-COMMENT ON COLUMN "MTC_CA_RUN_STEP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_RUN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #288
-COMMENT ON COLUMN "MTC_CA_RUN_ITER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_RUN_STEP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #289
-COMMENT ON COLUMN "MTC_CA_RUN_ITER_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_RUN_ITER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #290
-COMMENT ON COLUMN "MTC_CA_RUN_KPI"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_RUN_ITER_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #291
-COMMENT ON COLUMN "MTC_CA_C_SCENARIO"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_RUN_KPI"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #292
-COMMENT ON COLUMN "MTC_CA_C_SCENARIO_OVR"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_C_SCENARIO"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #293
-COMMENT ON COLUMN "MTC_CA_S_ITEM"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_C_SCENARIO_OVR"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #294
-COMMENT ON COLUMN "MTC_CA_S_ITEM"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_ITEM"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #295
-COMMENT ON COLUMN "MTC_CA_S_ITEM"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_ITEM"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #296
-COMMENT ON COLUMN "MTC_CA_S_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_ITEM"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #297
-COMMENT ON COLUMN "MTC_CA_S_LINE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #298
-COMMENT ON COLUMN "MTC_CA_S_LINE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_LINE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #299
-COMMENT ON COLUMN "MTC_CA_S_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_LINE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #300
-COMMENT ON COLUMN "MTC_CA_S_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #301
-COMMENT ON COLUMN "MTC_CA_S_ORDER"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #302
-COMMENT ON COLUMN "MTC_CA_S_ORDER"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_ORDER"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #303
-COMMENT ON COLUMN "MTC_CA_S_ORDER"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #304
-COMMENT ON COLUMN "MTC_CA_S_ORDER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #305
-COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #306
-COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #307
-COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #308
-COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #309
-COMMENT ON COLUMN "MTC_CA_S_EXP"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #310
-COMMENT ON COLUMN "MTC_CA_S_EXP"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_EXP"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #311
-COMMENT ON COLUMN "MTC_CA_S_EXP"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_EXP"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #312
-COMMENT ON COLUMN "MTC_CA_S_EXP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_EXP"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #313
-COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_EXP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #314
-COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #315
-COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #316
-COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #317
-COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_SUBFEE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #318
-COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #319
-COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #320
-COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #321
-COMMENT ON COLUMN "MTC_CA_S_HOURS"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_AP_MOVE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #322
-COMMENT ON COLUMN "MTC_CA_S_HOURS"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_HOURS"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #323
-COMMENT ON COLUMN "MTC_CA_S_HOURS"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_HOURS"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #324
-COMMENT ON COLUMN "MTC_CA_S_HOURS"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_HOURS"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #325
-COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_HOURS"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #326
-COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #327
-COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #328
-COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #329
-COMMENT ON COLUMN "MTC_CA_S_OPEN"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_QCPRICE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #330
-COMMENT ON COLUMN "MTC_CA_S_OPEN"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_OPEN"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #331
-COMMENT ON COLUMN "MTC_CA_S_OPEN"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_OPEN"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #332
-COMMENT ON COLUMN "MTC_CA_S_OPEN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_OPEN"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #333
-COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_OPEN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #334
-COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #335
-COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #336
-COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #337
-COMMENT ON COLUMN "MTC_CA_R_CHECK"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_S_ORDER_OPEN"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #338
-COMMENT ON COLUMN "MTC_CA_R_CHECK"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_CHECK"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #339
-COMMENT ON COLUMN "MTC_CA_R_CHECK"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #340
-COMMENT ON COLUMN "MTC_CA_R_CHECK"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #341
-COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #342
-COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #343
-COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #344
-COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #345
-COMMENT ON COLUMN "MTC_CA_BOOT_ITEM"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_CHECK_DTL"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #346
-COMMENT ON COLUMN "MTC_CA_BOOT_ORDER"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_BOOT_ITEM"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #347
-COMMENT ON COLUMN "MTC_CA_BOOT_ORDER_MAT"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_BOOT_ORDER"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #348
-COMMENT ON COLUMN "MTC_CA_R_LINE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_BOOT_ORDER_MAT"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #349
-COMMENT ON COLUMN "MTC_CA_R_LINE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_LINE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #350
-COMMENT ON COLUMN "MTC_CA_R_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_LINE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #351
-COMMENT ON COLUMN "MTC_CA_R_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #352
-COMMENT ON COLUMN "MTC_CA_R_ITEM"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #353
-COMMENT ON COLUMN "MTC_CA_R_ITEM"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_ITEM"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #354
-COMMENT ON COLUMN "MTC_CA_R_ITEM"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_ITEM"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #355
-COMMENT ON COLUMN "MTC_CA_R_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_ITEM"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #356
-COMMENT ON COLUMN "MTC_CA_R_ORDER"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_ITEM"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #357
-COMMENT ON COLUMN "MTC_CA_R_ORDER"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_ORDER"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #358
-COMMENT ON COLUMN "MTC_CA_R_ORDER"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #359
-COMMENT ON COLUMN "MTC_CA_R_ORDER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #360
-COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #361
-COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #362
-COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #363
-COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #364
-COMMENT ON COLUMN "MTC_CA_R_POOL"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_ORDER_MAT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #365
-COMMENT ON COLUMN "MTC_CA_R_POOL"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_POOL"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #366
-COMMENT ON COLUMN "MTC_CA_R_POOL"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_POOL"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #367
-COMMENT ON COLUMN "MTC_CA_R_POOL"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_POOL"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #368
-COMMENT ON COLUMN "MTC_CA_R_ALLOC"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_POOL"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #369
-COMMENT ON COLUMN "MTC_CA_R_ALLOC"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_ALLOC"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #370
-COMMENT ON COLUMN "MTC_CA_R_ALLOC"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_ALLOC"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #371
-COMMENT ON COLUMN "MTC_CA_R_ALLOC"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_ALLOC"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #372
-COMMENT ON COLUMN "MTC_CA_R_PAIR"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_ALLOC"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #373
-COMMENT ON COLUMN "MTC_CA_R_PAIR"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_PAIR"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #374
-COMMENT ON COLUMN "MTC_CA_R_PAIR"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_PAIR"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #375
-COMMENT ON COLUMN "MTC_CA_R_PAIR"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_PAIR"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #376
-COMMENT ON COLUMN "MTC_CA_R_CMP"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_PAIR"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #377
-COMMENT ON COLUMN "MTC_CA_R_CMP"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_CMP"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #378
-COMMENT ON COLUMN "MTC_CA_R_CMP"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_CMP"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #379
-COMMENT ON COLUMN "MTC_CA_R_CMP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_CMP"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #380
-COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_CMP"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #381
-COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #382
-COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #383
-COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #384
-COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #385
-COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #386
-COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #387
-COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #388
-COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_REVAL_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #389
-COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #390
-COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #391
-COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #392
-COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_QCP_LINE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #393
-COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #394
-COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #395
-COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #396
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_HOURS_NEED"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #397
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #398
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #399
-COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #400
-COMMENT ON COLUMN "MTC_CA_R_JDT"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_JDT_SRC"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #401
-COMMENT ON COLUMN "MTC_CA_R_JDT"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_JDT"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #402
-COMMENT ON COLUMN "MTC_CA_R_JDT"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_JDT"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #403
-COMMENT ON COLUMN "MTC_CA_R_JDT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_JDT"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #404
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_JDT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #405
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #406
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #407
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #408
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #409
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #410
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #411
-COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #412
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_OUT_BEG"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #413
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #414
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #415
-COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #416
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_AP_ACCR"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #417
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #418
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #419
-COMMENT ON COLUMN "MTC_CA_R_DNCOST"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."Scenario" IS '模拟场景（正式运行为空串）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #420
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."FcCode" IS '账期（OFPR.Code）'
+COMMENT ON COLUMN "MTC_CA_R_DNCOST"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #421
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."RunType" IS 'F 正式 / S 模拟'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."FcCode" IS '账期（OFPR.Code）'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #422
-COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Scenario" IS '模拟场景（正式运行为空串）'
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."RunType" IS 'F 正式 / S 模拟'
 
 @@
 -- @stmt 新框架 18_meta_comments.sql #423
+COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."Scenario" IS '模拟场景（正式运行为空串）'
+
+@@
+-- @stmt 新框架 18_meta_comments.sql #424
 COMMENT ON COLUMN "MTC_CA_R_GOODS_MOVE"."RunId" IS '运行号（MTC_CA_RUN.RunId）'
 
 @@
@@ -29595,7 +29615,7 @@ END
 -- ---------------------------------------------------------------------
 -- R10 成本凭证清单及来源：本期成本模块生成的凭证（每种凭证代码一张）、分录、每笔分录的业务来源。
 -- 参数：Fc 账期, TransCode 凭证代码, Acct 科目（开头匹配）, STYPE 0 按凭证代码（含 B1 凭单批号和状态）/ 1 分录 / 2 来源明细
--- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细金额正 = 借、负 = 贷。
+-- 口径：MTC_CA_R_JDT / R_JDT_SRC（凭证底稿）、MTC_CA_JV（已生成的 B1 日记账凭单）。来源明细按 R_JDT_SRC.Side 列在借方或贷方，金额可为红字（用户 2026-11-11）。
 -- 勾稽：来源明细合计 = 分录合计（V06）。
 -- 列名：凭证代码、科目编码这两列输出英文字段名 TransCode、AcctCode（用户 2026-11-07，这张报表特殊），执行台按 rpt_defs.json 的 alias 显示中文。
 -- 运行号 = 这张报表取数的成本运行（MTC_CA_RUN.RunId，规则同 R00），三种显示方式都有；分录号 = R_JDT.LineNo（凭证代码内的行号），分录、来源明细都有，
@@ -29635,8 +29655,9 @@ BEGIN
                CASE S."SrcType" WHEN 'LINE' THEN '单据行' WHEN 'ORDER' THEN '订单' WHEN 'DOC' THEN 'B1 单据行' WHEN 'GL' THEN '总账分录' WHEN 'OMRV' THEN '重估单'
                                 WHEN 'ITEM' THEN '物料尾差' ELSE S."SrcType" END AS "来源类型",
                S."SrcKey" AS "来源键",
-               CAST(CASE WHEN S."Amount" > 0 THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
-               CAST(CASE WHEN S."Amount" < 0 THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
+               -- 借贷方向取 Side（规则固定，可为红字，用户 2026-11-11）；历史回填没有 Side，按正负
+               CAST(CASE WHEN IFNULL(S."Side", CASE WHEN S."Amount" > 0 THEN 'D' ELSE 'C' END) = 'D' THEN S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "借方",
+               CAST(CASE WHEN IFNULL(S."Side", CASE WHEN S."Amount" > 0 THEN 'D' ELSE 'C' END) = 'C' THEN -S."Amount" ELSE 0 END AS DECIMAL(19,2)) AS "贷方",
                COALESCE(D."DocDate", CAST(NULL AS DATE)) AS "单据日期",
                "MTC_CA_F_RPT_DTNAME"(COALESCE(D."ObjType", O."OrderType")) AS "单据类型", COALESCE(D."DocNum", O."OrderNum") AS "单号 Num", D."LineNum" AS "行号",
                COALESCE(L."ItemCode", O."ItemCode") AS "物料", L."TransCode" AS "交易类型", CAST(L."Qty" AS DECIMAL(19,6)) AS "数量",
@@ -29648,10 +29669,12 @@ BEGIN
           LEFT JOIN "MTC_CA_S_ORDER" LO ON LO."RunId" = L."RunId" AND LO."OrderType" = L."OrderType" AND LO."OrderEntry" = L."OrderEntry"
           LEFT JOIN "MTC_CA_S_ORDER" O ON S."SrcType" = 'ORDER' AND O."RunId" = S."RunId" AND O."OrderType" || '-' || TO_NVARCHAR(O."OrderEntry") = S."SrcKey"
           LEFT JOIN "OACT" A ON A."AcctCode" = S."AcctCode"
-          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          -- 分录号：R_JDT 由 R_JDT_SRC 按 凭证代码 + 方向 + 科目 + 成本中心 + 项目 + 供应商 汇总（P70，空串当 NULL），同样的键找回；这组来源合计为 0 时没有分录，分录号为空
+          --   方向：借方行 Debit <> 0，贷方行 Debit = 0；历史回填的来源没有 Side，不比方向
           LEFT JOIN "MTC_CA_R_JDT" J ON J."RunId" = S."RunId" AND J."TransCode" = S."TransCode" AND IFNULL(J."AcctCode", '') = IFNULL(S."AcctCode", '')
                                     AND IFNULL(J."OcrCode", '') = IFNULL(S."OcrCode", '') AND IFNULL(J."Project", '') = IFNULL(S."Project", '')
                                     AND IFNULL(J."VendorCode", '') = IFNULL(S."VendorCode", '')
+                                    AND (S."Side" IS NULL OR S."Side" = CASE WHEN J."Debit" <> 0 THEN 'D' ELSE 'C' END)
           LEFT JOIN :jl X ON X."TransCode" = J."TransCode" AND X."LineNo" = J."LineNo"
          WHERE S."RunId" = :rid
            AND (:nTc = 0 OR EXISTS (SELECT 1 FROM :lTc X WHERE S."TransCode" = X."V"))
